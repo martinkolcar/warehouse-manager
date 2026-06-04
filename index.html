@@ -114,6 +114,139 @@ table.main td.center { text-align: center; }
 }
 .act-btn:hover { background: #f0f2f5; }
 .act-btn.del:hover { border-color: #e74c3c; color: #e74c3c; }
+
+/* ─── VÝDAJKA MODAL ─── */
+.vyd-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+  z-index: 1000; align-items: center; justify-content: center;
+}
+.vyd-overlay.open { display: flex; }
+.vyd-panel {
+  background: #fff; border-radius: 12px; width: 96vw; max-width: 1200px;
+  height: 88vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  overflow: hidden;
+}
+.vyd-header {
+  background: #1a1a2e; color: #fff; padding: 14px 20px;
+  display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+}
+.vyd-header h2 { font-size: 15px; font-weight: 700; }
+.vyd-body { display: flex; flex: 1; overflow: hidden; }
+
+/* Ľavý panel - izometrie */
+.vyd-iso-panel {
+  width: 280px; min-width: 220px; border-right: 1px solid #e4e8ef;
+  display: flex; flex-direction: column; background: #f7f8fa; flex-shrink: 0;
+}
+.vyd-iso-search {
+  padding: 10px 12px; border-bottom: 1px solid #e4e8ef; flex-shrink: 0;
+}
+.vyd-iso-search input {
+  width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px;
+  font-size: 12px; outline: none;
+}
+.vyd-iso-search input:focus { border-color: #4f7cff; }
+.vyd-iso-search select {
+  width: 100%; margin-top: 6px; padding: 6px 8px; border: 1px solid #ccc;
+  border-radius: 6px; font-size: 12px; outline: none; background: #fff;
+}
+.vyd-iso-list { flex: 1; overflow-y: auto; }
+.vyd-iso-item {
+  padding: 8px 12px; border-bottom: 1px solid #eee; cursor: pointer;
+  display: flex; align-items: center; gap: 6px; transition: background 0.1s;
+}
+.vyd-iso-item:hover { background: #eef2ff; }
+.vyd-iso-item.active { background: #dbeafe; border-left: 3px solid #4f7cff; }
+.vyd-iso-name { font-size: 11px; line-height: 1.35; flex: 1; font-family: monospace; word-break: break-all; }
+.vyd-sec-tag {
+  font-size: 9px; padding: 1px 5px; border-radius: 3px;
+  background: #dbeafe; color: #1d4ed8; font-weight: 700; flex-shrink: 0;
+}
+
+/* Pravý panel - výdajka */
+.vyd-right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+.vyd-iso-header {
+  padding: 12px 18px; border-bottom: 1px solid #e4e8ef; background: #fff;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex-shrink: 0;
+}
+.vyd-iso-title { font-family: monospace; font-size: 14px; font-weight: 700; color: #1a1a2e; flex: 1; }
+.vyd-iso-title.empty { color: #aaa; font-family: inherit; font-size: 13px; font-weight: 400; }
+
+/* Filtre materiálov */
+.vyd-mat-filters {
+  padding: 8px 14px; background: #f7f8fa; border-bottom: 1px solid #e4e8ef;
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap; flex-shrink: 0;
+}
+.vyd-mat-filters label { font-size: 11px; color: #666; }
+.vyd-mat-filters select, .vyd-mat-filters input {
+  padding: 5px 8px; border: 1px solid #ccc; border-radius: 5px;
+  font-size: 12px; outline: none; background: #fff;
+}
+.vyd-mat-filters select:focus, .vyd-mat-filters input:focus { border-color: #4f7cff; }
+
+/* Zoznam materiálov na výber */
+.vyd-mat-list-wrap {
+  flex: 1; overflow-y: auto; padding: 8px 14px;
+}
+.vyd-mat-row {
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+  border: 1px solid #e4e8ef; border-radius: 6px; margin-bottom: 5px;
+  background: #fff; cursor: pointer; transition: all 0.12s;
+  flex-wrap: wrap;
+}
+.vyd-mat-row:hover { border-color: #4f7cff; background: #f0f5ff; }
+.vyd-mat-row .mat-info { flex: 1; min-width: 0; }
+.vyd-mat-row .mat-typ { font-size: 11px; color: #555; }
+.vyd-mat-row .mat-rozmer { font-family: monospace; font-size: 12px; font-weight: 700; }
+.vyd-mat-row .mat-tavba { font-family: monospace; font-size: 10px; color: #888; }
+.vyd-mat-row .mat-stock { font-size: 11px; font-weight: 700; }
+
+/* Výdajka riadky - spodný panel */
+.vyd-lines-panel {
+  background: #fff; border-top: 2px solid #4f7cff;
+  display: flex; flex-direction: column; flex-shrink: 0; max-height: 45%;
+}
+.vyd-lines-head {
+  padding: 8px 16px; background: #1a1a2e; color: #fff;
+  display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 600;
+}
+.vyd-lines-scroll { flex: 1; overflow-y: auto; }
+.vyd-lines-table {
+  width: 100%; border-collapse: collapse; font-size: 12px;
+}
+.vyd-lines-table thead th {
+  background: #f0f2f5; padding: 6px 10px; text-align: left;
+  font-size: 10px; text-transform: uppercase; color: #666;
+  position: sticky; top: 0; white-space: nowrap;
+}
+.vyd-lines-table td { padding: 5px 10px; border-bottom: 1px solid #eee; }
+.vyd-lines-table tr:last-child td { border-bottom: none; }
+.vyd-inline-inp {
+  padding: 3px 7px; border: 1px solid #ccc; border-radius: 4px;
+  font-size: 12px; font-family: monospace; width: 80px; outline: none;
+}
+.vyd-inline-inp:focus { border-color: #4f7cff; }
+.vyd-footer {
+  padding: 10px 16px; background: #f7f8fa; border-top: 1px solid #e4e8ef;
+  display: flex; gap: 10px; align-items: center; flex-shrink: 0;
+}
+
+/* Merge Info Modal */
+.merge-info-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+  z-index: 2000; align-items: center; justify-content: center;
+}
+.merge-info-overlay.open { display: flex; }
+.merge-info-box {
+  background: #fff; border-radius: 10px; padding: 24px 28px;
+  width: 600px; max-width: 95vw; max-height: 80vh; display: flex;
+  flex-direction: column; box-shadow: 0 16px 48px rgba(0,0,0,0.2);
+}
+.merge-info-box h3 { font-size: 15px; margin-bottom: 14px; }
+.merge-info-scroll { flex: 1; overflow-y: auto; border: 1px solid #e4e8ef; border-radius: 6px; }
+.merge-info-scroll table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.merge-info-scroll th { background: #f0f2f5; padding: 6px 10px; text-align: left; font-size:11px; text-transform:uppercase; color:#666; position:sticky; top:0; }
+.merge-info-scroll td { padding: 5px 10px; border-bottom: 1px solid #eee; }
 </style>
 </head>
 <body>
@@ -121,8 +254,10 @@ table.main td.center { text-align: center; }
 <header>
   <div>
     <h1>Sklad <span>materiálu</span></h1>
-    <div class="sub">PMP Montex · v0.1</div>
+    <div class="sub">PMP Montex · v0.2</div>
   </div>
+  <div style="flex:1"></div>
+  <button class="btn" style="background:#4f7cff;color:#fff;font-size:13px;padding:9px 20px;border-radius:6px" onclick="openVydajkaWindow()">📋 Nová výdajka</button>
 </header>
 
 <div class="toolbar">
@@ -437,6 +572,34 @@ function parseHtml(html, filename) {
       const matMatch = norma.match(/^([A-Z]\d+[A-Z]*)/);
       const material = matMatch ? matMatch[1] : (norma.split(',')[0] || '').trim();
 
+      // ─── Multi-tavba split (len pre non-pipe) ───
+      // Formát: "S3805-21ks,1221261-83ks" alebo "R56791-10ks,R61462-5ks"
+      if (!isPipe && tavba && tavba.includes(',')) {
+        // Skús rozbiť: každý segment má formu <tavba>-<qty>ks alebo <tavba>,<qty>ks
+        const segments = tavba.split(',').map(s => s.trim()).filter(Boolean);
+        // Skontroluj či každý segment má qty suffix (napr. 21ks alebo 21)
+        const parsed = segments.map(seg => {
+          const m = seg.match(/^(.+?)-?(\d+)\s*ks?$/i);
+          if (m) return { tavba: m[1].trim(), qty: parseFloat(m[2]) };
+          return null;
+        });
+        if (parsed.every(p => p !== null)) {
+          // Každý segment = samostatný riadok
+          parsed.forEach(p => {
+            result.push({
+              typ: desc, rozmer, material, norma,
+              jednotka: 'ks',
+              zostatok: p.qty,
+              tavba: p.tavba,
+              poznamka,
+              zdroj_dl: dlCislo,
+              datum: new Date().toISOString().split('T')[0],
+            });
+          });
+          continue; // preskoč normálne pridanie
+        }
+      }
+
       result.push({
         typ:      desc,
         rozmer:   rozmer,
@@ -495,6 +658,7 @@ function confirmImport() {
   if (!selected.length) { alert('Žiadne položky vybrané.'); return; }
   const merge = document.getElementById('merge-chk').checked;
   let imported = 0, merged = 0;
+  const mergeLog = []; // sledovanie čo sa zlúčilo
 
   selected.forEach(idx => {
     const it = previewItems[idx];
@@ -504,9 +668,12 @@ function confirmImport() {
         m.norma === it.norma && m.tavba === it.tavba
       );
       if (ex >= 0) {
-        items[ex].zostatok = Math.round(((parseFloat(items[ex].zostatok)||0) + (parseFloat(it.zostatok)||0)) * 10000) / 10000;
+        const pred = parseFloat(items[ex].zostatok)||0;
+        const pridane = parseFloat(it.zostatok)||0;
+        items[ex].zostatok = Math.round((pred + pridane) * 10000) / 10000;
         items[ex].zdroj_dl = it.zdroj_dl;
         items[ex].datum    = it.datum;
+        mergeLog.push({ typ: it.typ, rozmer: it.rozmer, tavba: it.tavba, pred, pridane, po: items[ex].zostatok });
         merged++;
         return;
       }
@@ -519,7 +686,33 @@ function confirmImport() {
   render();
   document.getElementById('preview-wrap').style.display = 'none';
   previewItems = [];
-  setStatus(`✓ Importovaných: ${imported} nových, ${merged} zlúčených.`, 'ok');
+
+  // Ulož merge log pre info tlačidlo
+  window._lastMergeLog = mergeLog;
+
+  const mergeBtn = merged > 0
+    ? ` <button class="btn btn-gray" style="padding:3px 10px;font-size:11px;margin-left:8px" onclick="showMergeInfo()">ℹ️ Info (${merged})</button>`
+    : '';
+  document.getElementById('status-text').innerHTML = '';
+  const span = document.createElement('span');
+  span.className = 'status-ok';
+  span.innerHTML = `✓ Importovaných: ${imported} nových, ${merged} zlúčených.${mergeBtn}`;
+  document.getElementById('status-text').appendChild(span);
+}
+
+function showMergeInfo() {
+  const log = window._lastMergeLog || [];
+  if (!log.length) return;
+  const tbody = document.getElementById('merge-info-tbody');
+  tbody.innerHTML = log.map(r => `<tr>
+    <td style="font-size:11px">${r.typ}</td>
+    <td style="font-family:monospace">${r.rozmer}</td>
+    <td style="font-family:monospace;font-size:11px">${r.tavba||'—'}</td>
+    <td style="text-align:center">${r.pred}</td>
+    <td style="text-align:center;color:#27ae60;font-weight:700">+${r.pridane}</td>
+    <td style="text-align:center;font-weight:700">${r.po}</td>
+  </tr>`).join('');
+  document.getElementById('merge-info-overlay').classList.add('open');
 }
 
 // ─── CRUD ─────────────────────────────────────
@@ -618,6 +811,439 @@ document.getElementById('modal').addEventListener('click', function(e) {
 
 // Init
 render();
+</script>
+<div id="merge-info-overlay" class="merge-info-overlay">
+  <div class="merge-info-box">
+    <h3>ℹ️ Zlúčené položky</h3>
+    <div class="merge-info-scroll">
+      <table>
+        <thead><tr>
+          <th>Typ</th><th>Rozmer</th><th>Tavba</th><th>Pred</th><th>Pridané</th><th>Po</th>
+        </tr></thead>
+        <tbody id="merge-info-tbody"></tbody>
+      </table>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px">
+      <button class="btn btn-gray" onclick="document.getElementById('merge-info-overlay').classList.remove('open')">Zavrieť</button>
+    </div>
+  </div>
+</div>
+
+<!-- VÝDAJKA MODAL -->
+<div id="vyd-overlay" class="vyd-overlay">
+  <div class="vyd-panel">
+    <!-- Header -->
+    <div class="vyd-header">
+      <h2>📋 Výdajka</h2>
+      <span id="vyd-number" style="font-family:monospace;font-size:12px;color:#9a9bb0"></span>
+      <div style="flex:1"></div>
+      <button class="btn" style="background:#27ae60;color:#fff;padding:6px 14px" onclick="saveVydajka('pdf')">📄 PDF</button>
+      <button class="btn" style="background:#4f7cff;color:#fff;padding:6px 14px;margin-left:6px" onclick="saveVydajka('save')">💾 Uložiť</button>
+      <button class="btn btn-gray" style="margin-left:6px;padding:6px 14px" onclick="closeVydajka()">✕ Zavrieť</button>
+    </div>
+    <!-- Body -->
+    <div class="vyd-body">
+      <!-- Ľavý panel: izometrie -->
+      <div class="vyd-iso-panel">
+        <div class="vyd-iso-search">
+          <input id="vyd-iso-inp" placeholder="🔍 Hľadaj izometriu..." oninput="renderIsoList(this.value)">
+          <select id="vyd-sec-sel" onchange="renderIsoList(document.getElementById('vyd-iso-inp').value)">
+            <option value="">Všetky sekcie</option>
+            <option value="SUL">SUL</option>
+            <option value="FLA">FLA</option>
+            <option value="LIG">LIG</option>
+            <option value="DRY">DRY</option>
+            <option value="LHT">LHT</option>
+          </select>
+        </div>
+        <div class="vyd-iso-list" id="vyd-iso-list">
+          <div style="padding:20px;text-align:center;color:#aaa;font-size:12px">Zadajte hľadaný text</div>
+        </div>
+      </div>
+
+      <!-- Pravý panel -->
+      <div class="vyd-right-panel">
+        <!-- ISO header -->
+        <div class="vyd-iso-header">
+          <span class="vyd-iso-title empty" id="vyd-iso-title">← Vyberte izometriu zo zoznamu</span>
+        </div>
+        <!-- Filtre materiálov -->
+        <div class="vyd-mat-filters" id="vyd-mat-filters" style="display:none">
+          <label>Typ:</label>
+          <select id="vf-typ" onchange="renderVydMatList()"><option value="">— všetky —</option></select>
+          <label>Rozmer:</label>
+          <input id="vf-rozmer" placeholder="napr. 114.3" oninput="renderVydMatList()" style="width:110px">
+          <label>Materiál:</label>
+          <input id="vf-mat" placeholder="napr. P235GH" oninput="renderVydMatList()" style="width:110px">
+          <button class="btn btn-gray" style="padding:4px 10px;font-size:12px" onclick="clearVydFilters()">× reset</button>
+          <span id="vf-count" style="font-size:11px;color:#888;margin-left:4px"></span>
+        </div>
+        <!-- Zoznam materiálov na výber -->
+        <div class="vyd-mat-list-wrap" id="vyd-mat-list">
+          <div style="text-align:center;padding:40px;color:#aaa;font-size:13px">Vyberte izometriu</div>
+        </div>
+        <!-- Výdajka riadky (spodný panel) -->
+        <div class="vyd-lines-panel" id="vyd-lines-panel" style="display:none">
+          <div class="vyd-lines-head">
+            <span>Výdajka — pridané položky</span>
+            <span id="vyd-lines-count" style="font-size:11px;color:#9a9bb0"></span>
+            <div style="flex:1"></div>
+            <button onclick="clearVydLines()" style="background:none;border:1px solid #444;color:#aaa;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px">🗑 Vymazať všetko</button>
+          </div>
+          <div class="vyd-lines-scroll">
+            <table class="vyd-lines-table">
+              <thead><tr>
+                <th>Typ</th><th>Rozmer</th><th>Materiál</th><th>Tavba</th>
+                <th>Qty izom.</th><th>Vydané</th><th>Jed.</th>
+                <th id="vyd-th-dlzka" style="display:none">Dĺžka (mm)</th>
+                <th id="vyd-th-sp" style="display:none">SP č.</th>
+                <th></th>
+              </tr></thead>
+              <tbody id="vyd-lines-tbody"></tbody>
+            </table>
+          </div>
+          <div class="vyd-footer">
+            <span style="font-size:12px;color:#666">Celkom položiek: <strong id="vyd-total-count">0</strong></span>
+            <div style="flex:1"></div>
+            <button class="btn" style="background:#27ae60;color:#fff;padding:7px 18px" onclick="saveVydajka('pdf')">📄 PDF</button>
+            <button class="btn btn-gray" style="padding:7px 18px" onclick="saveVydajka('save')">💾 Uložiť</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── IZOMETRIE (z IsoManagera, staticky) ────────────────────────────────
+const ISOS = {
+  SUL: ["AG-712-20077-1-80-10H1A","AG-712-20078-4-50-10H1A","AS-712-20053-1-100-10H2A","GA-712-20033-1-10-10H1A","GA-712-20034-1-10-10H1A","GA-712-20048-1-150-10H1A","GA-712-20048-5-150-10H1A","GA-712-20049-1-150-10H1A","GAL-712-20061-1-350-10H2A","GAL-712-20061-2-200-10H2A","GAL-712-20061-5-50-10H2A","GAL-712-20061-8-150-10H2A","GAL-712-20061-10-150-10H2A","GAL-712-20061-14-150-10H2A","GAT-712-20057-1-350-10H2A","GAT-712-20057-5-200-10H2A","GAT-712-20057-6-150-10H2A","GAT-712-20057-15-250-10H2A","GAT-712-20057-17-250-10H2A","GAT-712-20057-20-50-10H2A","GAT-712-20057-23-200-10H2A","GAT-712-20057-25-200-10H2A","GAT-712-20057-30-200-10H2A","GAT-712-20057-104-200-10H2A","GCO2-712-20095-1-100-25H2A","GLP-712-20019-167-15-10H1A","GLP-712-20081-1-80-10H1A","GLP-712-20081-2-25-10H1A","GLP-712-20081-3-15-10H1A","GLP-712-20081-4-15-10H1A","GLP-712-20081-5-15-10H1A","GLP-712-20081-6-15-10H1A","GLP-712-20081-15-15-10H1A","GLP-712-20081-18-15-10H1A","GLP-712-20081-21-15-10H1A","GLP-712-20081-24-15-10H1A","GLP-712-20081-26-15-10H1A","GLP-712-20081-27-50-10H1A","GLP-712-20081-29-15-10H1A","GLP-712-20081-32-15-10H1A","GLP-712-20081-37-25-10H1A","GLP-712-20081-39-15-10H1A","GLP-712-20081-40-15-10H1A","GLP-712-20081-41-50-10H1A","GLP-712-20081-42-25-10H1A","GLP-712-20081-43-15-10H1A","GLP-712-20081-44-25-10H1A","GLP-712-20081-45-15-10H1A","GLP-712-20081-46-15-10H1A","GLP-712-20081-47-15-10H1A","GLP-712-20081-49-15-10H1A","GLP-712-20081-52-15-10H1A","GLP-712-20081-54-15-10H1A","GLP-712-20081-55-15-10H1A","GLP-712-20081-56-15-10H1A","GLP-712-20081-57-25-10H1A","GLP-712-20081-58-15-10H1A","GLP-712-20081-59-15-10H1A","GLP-712-20081-60-15-10H1A","GLP-712-20081-61-15-10H1A","GLP-712-20081-62-15-10H1A","GLP-712-20081-63-15-10H1A","GLP-712-20081-65-15-10H1A","GLP-712-20081-68-15-10H1A","GLP-712-20081-75-15-10H1A","GLP-712-20081-77-15-10H1A","GLP-712-20081-79-15-10H1A","GLP-712-20081-80-15-10H1A","GLP-712-20081-82-15-10H1A","GLP-712-20081-84-15-10H1A","GLP-712-20081-87-15-10H1A","GLP-712-20081-88-15-10H1A","GLP-712-20081-89-15-10H1A","GLP-712-20081-90-15-10H1A","GLP-712-20081-91-15-10H1A","GLP-712-20081-92-15-10H1A","GLP-712-20081-93-15-10H1A","GLP-712-20081-94-15-10H1A","GLP-712-20081-95-15-10H1A","GLP-712-20081-96-15-10H1A","GLP-712-20081-98-15-10H1A","GLP-712-20081-99-15-10H1A","GLP-712-20082-12-15-10H1A","GLP-712-20082-15-15-10H1A","GLP-712-20103-1-15-10H1A","GLS-712-20081-22-15-10H1A","GLS-712-20081-33-15-10H1A","GLS-712-20081-36-15-10H1A","GLS-712-20081-86-15-10H1A","GLS-712-20082-1-50-10H1A","GLS-712-20082-2-25-10H1A","GLS-712-20082-3-25-10H1A","GLS-712-20082-5-25-10H1A","GLS-712-20082-6-25-10H1A","GLS-712-20082-7-25-10H1A","GLS-712-20082-8-25-10H1A","GLS-712-20082-9-25-10H1A","GLS-712-20082-10-25-10H1A","GN2-712-20096-1-100-25H1A","H2SO4-712-20038-10-50-10H2A","H2SO4-712-20038-14-50-10H2A","H2SO4-712-20038-15-25-10H2A","H2SO4-712-20038-16-25-10H2A","H2SO4-712-20038-17-50-10H2A","H2SO4-712-20038-18-25-10H2A","H2SO4-712-20038-19-25-10H2A","H2SO4-712-20038-20-50-10H2A","H2SO4-712-20038-21-25-10H2A","H2SO4-712-20038-22-25-10H2A","H2SO4-712-20038-23-25-10H2A","H2SO4-712-20038-24-25-10H2A","H2SO4-712-20041-2-50-10H2A","H2SO4-712-20043-1-80-10H2A","H2SO4-712-20043-2-50-10H2A","H2SO4-712-20043-3-25-10H2A","H2SO4-712-20043-4-25-10H2A","H2SO4-712-20043-5-80-10H2A","H2SO4-712-20043-6-25-10H2A","H2SO4-712-20043-7-50-10H2A","H2SO4-712-20043-8-50-10H2A","H2SO4-712-20043-9-25-10H2A","H2SO4-712-20043-10-25-10H2A","H2SO4-712-20043-11-25-10H2A","H2SO4-712-20044-1-50-10H2A","H2SO4-712-20045-1-80-10H2A","H2SO4-712-20104-1-40-10H2A","H2SO4-712-20109-1-50-10H2A","H2SO4-712-20109-2-50-10H2A","K(GAL)-712-20061-6-25-10H1A","K(GAL)-712-20061-9-25-10H1A","K(GAL)-712-20061-13-50-10H2A","K(GAL)-712-20108-1-25-10H1A","K(GAT)-712-20057-2-50-10H2A","K(GAT)-712-20057-21-25-10H1A","K(GAT)-712-20057-24-25-10H1A","K(GAT)-712-20058-11-200-10H2A","K(GAT)-712-20058-12-200-10H2A","K(GAT)-712-20060-1-40-10H2A","K(GAT)-712-20062-2-40-10H2A","KF-712-20000-10-25-10H1A","KF-712-20001-9-25-10H1A","KF-712-20001-10-25-10H1A","KF-712-20001-14-25-10H1A","KF-712-20001-19-25-10H1A","KF-712-20001-28-25-10H1A","KF-712-20001-31-25-10H1A","KF-712-20001-39-25-10H1A","KF-712-20001-42-25-10H1A","KF-712-20001-45-25-10H1A","KF-712-20001-54-25-10H1A","KF-712-20001-59-25-10H1A","KF-712-20001-63-25-10H1A","KF-712-20001-65-25-10H1A","KF-712-20001-67-25-10H1A","KF-712-20001-70-25-10H1A","KF-712-20001-71-25-10H1A","KF-712-20002-4-25-10H1A","KF-712-20004-3-25-10H1A","KF-712-20011-1-25-10H1A","KF-712-20019-4-25-10H1A","KF-712-20019-8-25-10H1A","KF-712-20019-10-25-10H1A","KF-712-20019-11-25-10H1A","KF-712-20019-17-25-10H1A","KF-712-20019-19-25-10H1A","KF-712-20019-23-15-10H1A","KF-712-20019-28-25-10H1A","KF-712-20019-30-25-10H1A","KF-712-20019-32-25-10H1A","KF-712-20019-34-25-10H1A","KF-712-20019-37-25-10H1A","KF-712-20019-39-25-10H1A","KF-712-20019-50-25-10H1A","KF-712-20019-52-25-10H1A","KF-712-20019-65-25-10H1A","KF-712-20019-67-25-10H1A","KF-712-20019-70-25-10H1A","KF-712-20019-72-25-10H1A","KF-712-20019-74-25-10H1A","KF-712-20019-76-25-10H1A","KF-712-20019-86-25-10H1A","KF-712-20019-88-25-10H1A","KF-712-20019-91-25-10H1A","KF-712-20019-93-25-10H1A","KF-712-20019-96-25-10H1A","KF-712-20019-98-25-10H1A","KF-712-20019-106-25-10H1A","KF-712-20019-108-25-10H1A","KF-712-20019-111-25-10H1A","KF-712-20019-113-25-10H1A","KF-712-20019-116-25-10H1A","KF-712-20019-118-25-10H1A","KF-712-20019-121-25-10H1A","KF-712-20019-123-25-10H1A","KF-712-20019-126-25-10H1A","KF-712-20019-128-25-10H1A","KF-712-20019-131-25-10H1A","KF-712-20019-133-25-10H1A","KF-712-20019-136-25-10H1A","KF-712-20019-138-25-10H1A","KF-712-20019-145-25-10H1A","KF-712-20019-147-25-10H1A","KF-712-20019-149-25-10H1A","KF-712-20019-151-25-10H1A","KF-712-20019-152-25-10H1A","KF-712-20019-162-25-10H1A","KF-712-20019-165-25-10H1A","KF-712-20019-174-25-10H1A","KF-712-20019-178-25-10H1A","KF-712-20019-180-25-10H1A","KF-712-20019-183-25-10H1A","KF-712-20019-184-25-10H1A","KF-712-20019-189-25-10H1A","KF-712-20019-190-25-10H1A","KF-712-20019-201-25-10H1A","KF-712-20019-202-25-10H1A","KF-712-20019-205-25-10H1A","KF-712-20019-206-25-10H1A","KF-712-20019-209-25-10H1A","KF-712-20019-210-25-10H1A","KF-712-20019-222-25-10H1A","KF-712-20019-223-25-10H1A","KF-712-20019-225-25-10H1A","KF-712-20019-226-25-10H1A","KF-712-20019-241-25-10H1A","KF-712-20019-243-25-10H1A","KF-712-20019-246-25-10H1A","KF-712-20019-247-25-10H1A","KF-712-20019-255-25-10H1A","KF-712-20019-256-25-10H1A","KF-712-20019-259-25-10H1A","KF-712-20019-260-25-10H1A","KF-712-20019-273-25-10H1A","KF-712-20019-274-25-10H1A","KF-712-20019-278-25-10H1A","KF-712-20019-279-25-10H1A","KF-712-20020-1-25-10H1A","KF-712-20047-1-50-10H1A","KF-712-20048-3-50-10H1A","KF-712-20083-4-200-10H1A","KF-712-20083-5-50-10H1A","KF-712-20098-3-25-10H1A","KF-712-20098-4-25-10H1A","KF-712-20107-1-25-10H1A","KY-712-20057-9-80-10H1A","KY-712-20057-10-50-10H1A","KY-712-20057-11-50-10H1A","KY-712-20057-12-50-10H1A","KY-712-20057-13-25-10H1A","KY-712-20057-14-50-10H1A","KY-712-20057-29-100-10H2A","KY-712-20058-1-50-10H1A","KY-712-20058-2-25-10H1A","KY-712-20058-3-50-10H1A","KY-712-20058-4-25-10H1A","KY-712-20058-9-50-10H1A","KY-712-20090-1-25-10H1A","KY-712-20090-2-25-10H1A","KY-712-20090-3-25-10H1A","KY-712-20090-4-40-10H1A","KY-712-20090-5-40-10H1A","KY-712-20108-2-25-10H1A","NaHSO3-712-20027-1-300-10H2A","NaHSO3-712-20027-2-25-10H2A","NaHSO3-712-20027-3-200-10H2A","NaHSO3-712-20027-4-25-10H2A","NaHSO3-712-20027-5-80-10H2A","NaHSO3-712-20027-6-100-10H2A","NaHSO3-712-20027-7-80-10H2A","NaHSO3-712-20028-1-250-10H2A","NaHSO3-712-20028-2-25-10H2A","NaHSO3-712-20028-3-15-16H2A","NaHSO3-712-20028-4-150-16H2A","NaHSO3-712-20028-5-25-10H2A","NaHSO3-712-20028-6-50-16H2A","NaHSO3-712-20028-7-40-10H2A","NaHSO3-712-20028-8-150-16H2A","NaHSO3-712-20028-9-65-16H2A","NaHSO3-712-20028-10-65-16H2A","NaHSO3-712-20028-11-65-16H2A","NaHSO3-712-20028-14-40-10H2A","NaHSO3-712-20028-15-50-10H2A","NaHSO3-712-20029-1-100-10H2A","NaHSO3-712-20030-1-100-10H2A","NaHSO3-712-20031-1-150-10H2A","NaOH10-712-20141-1-25-10H2A","OEL-712-20059-1-25-16H2A","OEL-712-20059-3-15-16H2A","VKDN-712-20080-1-40-10H1A","VKDN-712-20080-2-25-10H1A","VKDN-712-20080-3-15-10H1A","VKDN-712-20080-4-25-10H1A","VKDN-712-20080-5-15-10H1A","VKDN-712-20080-6-25-10H1A","VKDN-712-20080-7-15-10H1A","VKDN-712-20080-8-25-10H1A","VKDN-712-20080-9-15-10H1A","VKDN-712-20080-10-25-10H1A","VKDN-712-20080-11-15-10H1A","VKDN-712-20080-12-25-10H1A","VKDN-712-20080-13-15-10H1A","VKDN-712-20080-14-40-10H1A","VKDN-712-20080-15-50-10H1A","VKDN-712-20080-16-50-10H1A","VKDN-712-20080-17-50-10H1A","VKDN-712-20080-18-50-10H1A","VKDN-712-20080-19-50-10H1A","VKM-712-20057-31-50-10H2A","VKM-712-20075-1-150-10H2A","VKM-712-20075-2-25-10H2A","VKM-712-20075-4-25-10H2A","VKM-712-20075-5-25-10H2A","VKM-712-20075-6-25-10H2A","VKM-712-20075-7-25-10H2A","VKM-712-20075-8-25-10H2A","VKM-712-20075-9-50-10H2A","VKM-712-20075-10-50-10H2A","VKM-712-20075-11-80-10H2A","VKM-712-20075-12-80-10H2A","VKM-712-20075-13-15-10H2A","VKM-712-20075-14-25-10H2A","VKM-712-20075-15-25-10H2A","VKM-712-20075-16-50-10H2A","VKM-712-20075-17-100-10H2A","VKM-712-20075-18-25-10H2A","VKM-712-20075-19-25-10H2A","VKM-712-20075-22-15-10H2A","VKM-712-20075-32-25-10H2A","VKM-712-20075-33-25-10H2A","VKM-712-20075-34-25-10H2A","VKM-712-20075-45-40-10H2A","VKS-712-20079-1-100-25H1A","VKS-712-20079-2-25-25H1A","VKS-712-20079-3-80-25H1A","VKS-712-20079-4-80-25H1A","VKS-712-20079-5-80-25H1A","VKS-712-20079-6-100-25H1A","VKS-712-20079-7-80-25H1A","VKS-712-20079-8-80-25H1A","VKS-712-20079-9-80-25H1A","VKS-712-20079-10-80-25H1A","VKS-712-20079-11-80-25H1A","VKS-712-20079-12-80-25H1A","VKT-712-20037-1-25-10H2A","VKT-712-20037-2-25-10H2A","VKT-712-20039-2-25-10H2A","VVM-712-20051-1-50-10H2A","VVM-712-20051-2-25-10H2A","VVM-712-20051-3-25-10H2A","VVM-712-20075-30-50-10H2A","VVM-712-20075-31-25-10H2A","VVM-712-20075-35-80-10H2A","VVM-712-20075-37-80-10H2A","VVM-712-20075-39-25-10H2A","VVM-712-20075-47-25-10H2A","VVM-712-20076-1-100-10H2A","VVM-712-20083-3-80-10H2A","VVM-712-20083-6-25-10H2A","VVM-712-20093-1-200-10H2A"],
+  FLA: ["ÅL3-710-20049-1-50-10C1B","ÅL3-710-20049-4-100-10C1B","ÅL3-710-20049-7-80-10C1B","GAL-710-20045-2-150-10H2A","GAL-710-20047-2-50-10H2A","GAL-710-20047-4-50-10H2A","GAL-710-20048-1-150-10H2A","GAL-710-20048-3-150-10H2A","GAT-710-20042-1-300-10H2A","GAT-710-20042-4-100-10H2A","GAT-710-20043-1-300-10H2A","GAT-710-20044-2-300-10H2A","GAT-710-20046-2-50-10H2A","GLP-710-20055-1-15-10H1A","GLP-710-20055-5-15-10H1A","GLP-710-20057-6-15-10H1A","GLP-710-20065-1-15-16H1A","GLP-710-20065-4-15-10H1A","K(GAT)-710-20050-1-80-10H2A","KY-710-20058-1-25-10H2A","KY-710-20059-1-25-10H2A","KY-710-20060-1-25-10H2A","KY-710-20061-1-25-10H2A","KY-710-20063-1-25-10H2A","KY-710-20064-1-50-10H2A","OEL-710-20056-1-15-16H2A","OEL-710-20056-2-15-16H2A"],
+  LIG: ["GA-720-20032-1-250-10H1A","GA-720-20038-1-200-10H1A","GA-720-20049-1-100-10H1A","GA-720-20058-1-150-10H1A","GA-720-20093-1-80-10H1A","GA-720-20093-2-150-10H1A","GA-720-20093-3-200-10H1A","GA-720-20093-4-250-10H1A","GA-720-20101-1-150-10H1A","GA-720-20102-1-150-10H1A","GAL-720-20065-1-200-10H2A","GAL-720-20066-1-250-10H2A","GAL-720-20147-1-350-16H2A","GLP-720-20004-1-80-10H1A","GLP-720-20004-2-50-10H1A","GLP-720-20004-3-50-10H1A","VKS-720-20007-1-80-25H1A","VKS-720-20007-2-80-25H1A","VKT-720-20024-1-100-10H2A","VVM-720-20014-1-100-10H2A","VVM-720-20046-1-250-10H2A"],
+  DRY: ["GLP-720-20004-14-40-10H1A","GLP-720-20004-15-40-10H1A","GLP-720-20004-16-40-10H1A","VKM-720-20005-25-250-10H2A"],
+  LHT: ["GÅL-716-20159-1-300-25H2A","GÅL-716-20160-1-300-25H2A","GÅL-716-20161-1-400-25H2A","GKD-716-20186-2-250-25H2A","KL-716-20185-1-50-40H1A","LTJ-716-20150-2-300-40H3A","LTJ-716-20151-1-300-40H3A","LTJ-716-20174-1-100-40H1A","VVM-716-20171-1-100-10H2A"]
+};
+
+// ─── VÝDAJKA STATE ────────────────────────────
+let vydajkyList = JSON.parse(localStorage.getItem('vydajky') || '[]');
+let vydLines = [];        // riadky aktuálnej výdajky
+let vydIso = null;        // aktuálne vybraná izometria
+let vydIsoSec = null;
+
+function openVydajkaWindow() {
+  const n = genVydNumber();
+  document.getElementById('vyd-number').textContent = n;
+  vydLines = [];
+  vydIso = null;
+  document.getElementById('vyd-iso-title').textContent = '← Vyberte izometriu zo zoznamu';
+  document.getElementById('vyd-iso-title').className = 'vyd-iso-title empty';
+  document.getElementById('vyd-mat-filters').style.display = 'none';
+  document.getElementById('vyd-mat-list').innerHTML = '<div style="text-align:center;padding:40px;color:#aaa;font-size:13px">Vyberte izometriu</div>';
+  document.getElementById('vyd-lines-panel').style.display = 'none';
+  document.getElementById('vyd-iso-inp').value = '';
+  renderIsoList('');
+  document.getElementById('vyd-overlay').classList.add('open');
+}
+
+function closeVydajka() {
+  if (vydLines.length && !confirm('Máte neuložené riadky. Naozaj zavrieť?')) return;
+  document.getElementById('vyd-overlay').classList.remove('open');
+}
+
+function genVydNumber() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  const seq = (vydajkyList.length + 1).toString().padStart(3,'0');
+  return `VYD-${yyyy}${mm}${dd}-${seq}`;
+}
+
+// ─── ISO LIST (ľavý panel) ────────────────────
+function renderIsoList(q) {
+  const sec = document.getElementById('vyd-sec-sel').value;
+  const ql = (q||'').toLowerCase().trim();
+  const el = document.getElementById('vyd-iso-list');
+
+  // Zbier všetky izometrie
+  let all = [];
+  Object.entries(ISOS).forEach(([s, list]) => {
+    if (sec && s !== sec) return;
+    list.forEach(iso => all.push({ sec: s, iso }));
+  });
+
+  // Filter
+  const filtered = ql
+    ? all.filter(r => r.iso.toLowerCase().includes(ql))
+    : (ql === '' && !sec ? [] : all);
+
+  if (!filtered.length) {
+    el.innerHTML = ql || sec
+      ? '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">Žiadne výsledky</div>'
+      : '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">Zadajte hľadaný text alebo vyberte sekciu</div>';
+    return;
+  }
+
+  el.innerHTML = filtered.slice(0, 200).map(r => {
+    const esc = r.iso.replace(/'/g, "\\'");
+    const active = vydIso === r.iso ? ' active' : '';
+    const highlight = ql ? r.iso.replace(new RegExp(`(${ql.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi'), '<mark style="background:#fff3b0;border-radius:2px">$1</mark>') : r.iso;
+    return `<div class="vyd-iso-item${active}" onclick="selectVydIso('${esc}','${r.sec}')">
+      <span class="vyd-iso-name">${highlight}</span>
+      <span class="vyd-sec-tag">${r.sec}</span>
+    </div>`;
+  }).join('');
+}
+
+function selectVydIso(iso, sec) {
+  vydIso = iso;
+  vydIsoSec = sec;
+  document.getElementById('vyd-iso-title').textContent = iso;
+  document.getElementById('vyd-iso-title').className = 'vyd-iso-title';
+  document.getElementById('vyd-mat-filters').style.display = 'flex';
+
+  // Aktualizuj filter dropdown pre typy
+  const typy = [...new Set(items.map(it => it.typ))].sort();
+  const sel = document.getElementById('vf-typ');
+  sel.innerHTML = '<option value="">— všetky —</option>' +
+    typy.map(t => `<option value="${t}">${t}</option>`).join('');
+  document.getElementById('vf-rozmer').value = '';
+  document.getElementById('vf-mat').value = '';
+
+  renderVydMatList();
+  renderIsoList(document.getElementById('vyd-iso-inp').value); // refresh active state
+}
+
+function clearVydFilters() {
+  document.getElementById('vf-typ').value = '';
+  document.getElementById('vf-rozmer').value = '';
+  document.getElementById('vf-mat').value = '';
+  renderVydMatList();
+}
+
+// ─── ZOZNAM MATERIÁLOV v pravom paneli ────────
+function renderVydMatList() {
+  const fTyp    = document.getElementById('vf-typ').value;
+  const fRozmer = document.getElementById('vf-rozmer').value.toLowerCase();
+  const fMat    = document.getElementById('vf-mat').value.toLowerCase();
+  const el      = document.getElementById('vyd-mat-list');
+
+  if (!vydIso) { el.innerHTML = ''; return; }
+
+  // Filtruj sklad
+  const filtered = items.filter(it => {
+    if (it.zostatok <= 0) return false;
+    if (fTyp    && it.typ !== fTyp) return false;
+    if (fRozmer && !(it.rozmer||'').toLowerCase().includes(fRozmer)) return false;
+    if (fMat    && !(it.material||'').toLowerCase().includes(fMat)) return false;
+    return true;
+  });
+
+  document.getElementById('vf-count').textContent = `${filtered.length} položiek`;
+
+  if (!filtered.length) {
+    el.innerHTML = '<div style="text-align:center;padding:30px;color:#aaa;font-size:12px">Žiadne položky (sklad prázdny alebo filter)</div>';
+    return;
+  }
+
+  const isPipe = (typ) => (typ||'').toLowerCase().includes('pipe');
+
+  el.innerHTML = filtered.map((it, i) => {
+    const realIdx = items.indexOf(it);
+    const q = parseFloat(it.zostatok) || 0;
+    const qClass = q <= 0 ? 'qty-zero' : q < 3 ? 'qty-low' : 'qty-ok';
+    const qStr = it.jednotka === 'm' ? q.toFixed(2) + ' m' : q + ' ks';
+    const badge = `<span class="badge badge-${typClass(it.typ)}">${shortType(it.typ)}</span>`;
+    return `<div class="vyd-mat-row" onclick="addToVydajka(${realIdx})">
+      <div class="mat-info">
+        <div>${badge} <span class="mat-rozmer">${it.rozmer}</span></div>
+        <div class="mat-typ">${it.typ}</div>
+        <div class="mat-tavba">Tavba: ${it.tavba||'—'} &nbsp;|&nbsp; ${it.material||''} &nbsp;|&nbsp; ${it.norma||''}</div>
+      </div>
+      <div style="text-align:right">
+        <span class="mat-stock ${qClass}">${qStr}</span><br>
+        <span style="font-size:10px;color:#aaa">${it.zdroj_dl||''}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── PRIDAŤ DO VÝDAJKY ────────────────────────
+function addToVydajka(idx) {
+  const it = items[idx];
+  if (!vydIso) { alert('Najprv vyberte izometriu'); return; }
+  const isPipe = (it.typ||'').toLowerCase().includes('pipe');
+
+  // Skontroluj či už je v riadkoch (ten istý materiál + tavba)
+  const existing = vydLines.findIndex(l => l.itemIdx === idx);
+  if (existing >= 0) {
+    // Zvýš qty
+    vydLines[existing].vydQty = (parseFloat(vydLines[existing].vydQty)||0) + 1;
+    renderVydLines();
+    return;
+  }
+
+  vydLines.push({
+    itemIdx: idx,
+    typ: it.typ,
+    rozmer: it.rozmer,
+    material: it.material,
+    norma: it.norma,
+    tavba: it.tavba,
+    jednotka: it.jednotka,
+    stockMax: parseFloat(it.zostatok)||0,
+    vydQty: isPipe ? '' : 1,
+    dlzka: '',   // len pre rúry
+    spCislo: '', // len pre rúry
+    isPipe,
+  });
+
+  document.getElementById('vyd-lines-panel').style.display = 'flex';
+  document.getElementById('vyd-lines-panel').style.flexDirection = 'column';
+  renderVydLines();
+}
+
+function renderVydLines() {
+  const tbody = document.getElementById('vyd-lines-tbody');
+  const hasPipe = vydLines.some(l => l.isPipe);
+  document.getElementById('vyd-th-dlzka').style.display = hasPipe ? '' : 'none';
+  document.getElementById('vyd-th-sp').style.display = hasPipe ? '' : 'none';
+
+  tbody.innerHTML = vydLines.map((l, i) => {
+    const badge = `<span class="badge badge-${typClass(l.typ)}">${shortType(l.typ)}</span>`;
+    const qClass = (parseFloat(l.vydQty)||0) > l.stockMax ? 'qty-zero' : 'qty-ok';
+    const pipeExtra = hasPipe
+      ? `<td>${l.isPipe ? `<input class="vyd-inline-inp" style="width:75px" value="${l.dlzka||''}" placeholder="mm" oninput="vydLines[${i}].dlzka=this.value">` : '—'}</td>
+         <td>${l.isPipe ? `<input class="vyd-inline-inp" style="width:75px" value="${l.spCislo||''}" placeholder="SP-xxx" oninput="vydLines[${i}].spCislo=this.value">` : '—'}</td>`
+      : '';
+    return `<tr>
+      <td>${badge}<br><span style="font-size:10px;color:#555">${l.typ}</span></td>
+      <td style="font-family:monospace;font-weight:700">${l.rozmer}</td>
+      <td style="font-family:monospace;font-size:11px">${l.material||'—'}</td>
+      <td style="font-family:monospace;font-size:11px">${l.tavba||'—'}</td>
+      <td style="text-align:center;color:#888">—</td>
+      <td>
+        <input class="vyd-inline-inp" style="width:65px" type="number" min="0" step="${l.isPipe?'0.001':'1'}"
+          value="${l.vydQty}" placeholder="0"
+          oninput="vydLines[${i}].vydQty=parseFloat(this.value)||0;updateVydCount()"
+        >
+      </td>
+      <td style="text-align:center">${l.jednotka}</td>
+      ${pipeExtra}
+      <td><button class="act-btn del" onclick="removeVydLine(${i})">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  updateVydCount();
+}
+
+function updateVydCount() {
+  const c = vydLines.length;
+  document.getElementById('vyd-lines-count').textContent = c + ' položiek';
+  document.getElementById('vyd-total-count').textContent = c;
+}
+
+function removeVydLine(i) {
+  vydLines.splice(i, 1);
+  if (!vydLines.length) document.getElementById('vyd-lines-panel').style.display = 'none';
+  else renderVydLines();
+}
+
+function clearVydLines() {
+  if (!vydLines.length) return;
+  if (!confirm('Vymazať všetky riadky?')) return;
+  vydLines = [];
+  document.getElementById('vyd-lines-panel').style.display = 'none';
+}
+
+// ─── ULOŽIŤ / PDF VÝDAJKY ─────────────────────
+function saveVydajka(mode) {
+  if (!vydIso) { alert('Vyberte izometriu'); return; }
+  if (!vydLines.length) { alert('Výdajka je prázdna'); return; }
+
+  const cislo = document.getElementById('vyd-number').textContent;
+  const datum = new Date().toISOString().split('T')[0];
+
+  // Odpočítaj zo skladu
+  vydLines.forEach(l => {
+    const qty = parseFloat(l.vydQty) || 0;
+    if (qty > 0 && l.itemIdx !== undefined) {
+      const cur = parseFloat(items[l.itemIdx].zostatok) || 0;
+      items[l.itemIdx].zostatok = Math.round((cur - qty) * 10000) / 10000;
+    }
+  });
+
+  // Ulož výdajku
+  const vydajka = {
+    cislo, iso: vydIso, sec: vydIsoSec, datum,
+    lines: vydLines.map(l => ({
+      typ: l.typ, rozmer: l.rozmer, material: l.material,
+      norma: l.norma, tavba: l.tavba, jednotka: l.jednotka,
+      vydQty: l.vydQty, dlzka: l.dlzka||'', spCislo: l.spCislo||''
+    }))
+  };
+  vydajkyList.push(vydajka);
+  save();
+  localStorage.setItem('vydajky', JSON.stringify(vydajkyList));
+  render();
+
+  if (mode === 'pdf') exportVydajkaPdf(vydajka);
+
+  setStatus(`✓ Výdajka ${cislo} uložená (${vydLines.length} položiek, izometria: ${vydIso})`, 'ok');
+  document.getElementById('vyd-overlay').classList.remove('open');
+}
+
+function exportVydajkaPdf(v) {
+  // Jednoduchý HTML print
+  const win = window.open('', '_blank');
+  const hasPipe = v.lines.some(l => l.isPipe || (l.typ||'').toLowerCase().includes('pipe'));
+  const rows = v.lines.map((l,i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td>${l.typ}</td>
+      <td>${l.rozmer}</td>
+      <td>${l.material||''}</td>
+      <td>${l.norma||''}</td>
+      <td>${l.tavba||''}</td>
+      <td style="text-align:center">—</td>
+      <td style="text-align:center;font-weight:bold">${l.vydQty}</td>
+      <td style="text-align:center">${l.jednotka}</td>
+      ${hasPipe ? `<td style="text-align:center">${l.dlzka||''}</td><td>${l.spCislo||''}</td>` : ''}
+    </tr>`).join('');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>${v.cislo}</title>
+    <style>
+      body{font-family:Arial,sans-serif;font-size:11px;padding:20px}
+      h2{font-size:15px;margin-bottom:4px}
+      .meta{color:#666;font-size:11px;margin-bottom:16px}
+      table{width:100%;border-collapse:collapse}
+      th{background:#1a1a2e;color:#fff;padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase}
+      td{padding:5px 8px;border-bottom:1px solid #eee}
+      tr:hover td{background:#f5f5ff}
+      @media print{body{padding:0}}
+    </style></head><body>
+    <h2>FABRICATION MATERIALS ISSUE SLIP &nbsp;·&nbsp; ${v.cislo}</h2>
+    <div class="meta">Izometria: <strong>${v.iso}</strong> &nbsp;|&nbsp; Sekcia: ${v.sec||''} &nbsp;|&nbsp; Dátum: ${v.datum}</div>
+    <table>
+      <thead><tr>
+        <th>#</th><th>Typ</th><th>Rozmer</th><th>Materiál</th><th>Norma</th>
+        <th>Tavba</th><th>Qty Izom.</th><th>Vydané</th><th>Jed.</th>
+        ${hasPipe ? '<th>Dĺžka (mm)</th><th>SP č.</th>' : ''}
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <script>window.onload=()=>{window.print();}<\/script>
+    </body></html>`);
+  win.document.close();
+}
+</script>
+<script>
+document.getElementById('merge-info-overlay').addEventListener('click', function(e) {
+  if (e.target === this) this.classList.remove('open');
+});
+document.getElementById('vyd-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeVydajka();
+});
 </script>
 </body>
 </html>
