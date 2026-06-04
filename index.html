@@ -182,6 +182,7 @@ table.main td.center { text-align: center; }
         <th>Norma</th>
         <th>Zostatok</th>
         <th>Jed.</th>
+        <th>Pozn.</th>
         <th>Tavba</th>
         <th>Dodací list</th>
         <th>Dátum</th>
@@ -189,7 +190,7 @@ table.main td.center { text-align: center; }
       </tr>
     </thead>
     <tbody id="main-tbody">
-      <tr class="empty-row"><td colspan="11">Sklad je prázdny. Nahrajte dodací list.</td></tr>
+      <tr class="empty-row"><td colspan="12">Sklad je prázdny. Nahrajte dodací list.</td></tr>
     </tbody>
   </table>
 </div>
@@ -270,7 +271,7 @@ function render() {
   const tbody = document.getElementById('main-tbody');
 
   if (!filtered.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="11">${
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="12">${
       items.length ? 'Žiadne výsledky pre filter.' : 'Sklad je prázdny. Nahrajte dodací list.'
     }</td></tr>`;
     return;
@@ -290,6 +291,7 @@ function render() {
       <td style="font-size:11px;color:#666">${it.norma||'—'}</td>
       <td class="center"><span class="qty ${qClass}">${qStr}</span></td>
       <td class="center" style="color:#666">${it.jednotka||'ks'}</td>
+      <td style="font-size:11px;color:#888">${it.poznamka||'—'}</td>
       <td class="mono" style="font-size:11px">${it.tavba||'—'}</td>
       <td style="font-size:11px">${it.zdroj_dl||'—'}</td>
       <td style="font-size:11px;color:#888">${it.datum||'—'}</td>
@@ -401,10 +403,11 @@ function parseHtml(html, filename) {
       const norma  = cells[2] || '';
       if (!desc || !rozmer) continue;
 
-      // Qty a tavba — štruktúra: ...| qty | ✓ | tavba |
-      // qty = prvé číslo v bunkách 3+
-      // tavba = posledná neprázdna bunka po qty (môže byť číslo aj text)
-      let qty = 0, tavba = '';
+      // Qty a tavba
+      // Rúry:   desc | rozmer | norma | qty  | ✓ | tavba
+      // Fiting: desc | rozmer | norma | pozn | qty | ✓ | tavba
+      // Pozn. = text ktorý nie je číslo (napr. 60,3x3,2-33,7x3,2)
+      let qty = 0, tavba = '', poznamka = '';
       let qtyFound = false;
       for (let i = 3; i < cells.length; i++) {
         const raw = cells[i];
@@ -413,13 +416,18 @@ function parseHtml(html, filename) {
         if (!cleaned) continue;
 
         if (!qtyFound) {
-          // Qty — prvé číslo
-          const num = cleaned.replace(',', '.').match(/^(\d+\.?\d*)/);
-          if (num) { qty = parseFloat(num[1]) || 0; qtyFound = true; }
+          const num = cleaned.replace(',', '.').match(/^(\d+\.?\d*)$/);
+          if (num) {
+            // Je to číslo = qty
+            qty = parseFloat(num[1]) || 0;
+            qtyFound = true;
+          } else {
+            // Nie je číslo = poznamka (Pozn. stĺpec)
+            poznamka = cleaned;
+          }
           continue;
         }
         // Po qty — tavba je posledná neprázdna hodnota
-        // môže byť číslo (54743) aj alfanumerická (C421449, S019757/1)
         tavba = cleaned;
       }
 
@@ -437,6 +445,7 @@ function parseHtml(html, filename) {
         jednotka: isPipe ? 'm' : 'ks',
         zostatok: qty,
         tavba:    tavba,
+        poznamka: poznamka,
         zdroj_dl: dlCislo,
         datum:    new Date().toISOString().split('T')[0],
       });
@@ -495,7 +504,7 @@ function confirmImport() {
         m.norma === it.norma && m.tavba === it.tavba
       );
       if (ex >= 0) {
-        items[ex].zostatok = (parseFloat(items[ex].zostatok)||0) + (parseFloat(it.zostatok)||0);
+        items[ex].zostatok = Math.round(((parseFloat(items[ex].zostatok)||0) + (parseFloat(it.zostatok)||0)) * 10000) / 10000;
         items[ex].zdroj_dl = it.zdroj_dl;
         items[ex].datum    = it.datum;
         merged++;
