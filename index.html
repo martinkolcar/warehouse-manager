@@ -393,8 +393,8 @@ function parseHtml(html, filename) {
           qty = parseFloat(num[1]) || 0;
           continue;
         }
-        // Tavba = alfanumerický reťazec 4+ znakov bez špeciálnych
-        if (!tavba && /^[A-Z0-9]{4,}$/i.test(cleaned)) {
+        // Tavba = alfanumerický reťazec 4+ znakov, môže obsahovať / -
+        if (!tavba && cleaned.length >= 4 && !/^[\d.,]+$/.test(cleaned)) {
           tavba = cleaned;
         }
       }
