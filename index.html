@@ -268,6 +268,7 @@ table.main td.center { text-align: center; }
   </div>
   <button class="btn btn-gray" onclick="openAddModal()">+ Pridať ručne</button>
   <button class="btn btn-gray" onclick="exportCSV()">⬇ Export CSV</button>
+  <button class="btn btn-gray" onclick="openVydajkyZoznam()" style="background:#f0f4ff;border-color:#4f7cff;color:#4f7cff">📋 Výdajky</button>
   <span style="flex:1"></span>
   <button class="btn btn-red" onclick="clearAll()">🗑 Vymazať všetko</button>
 </div>
@@ -837,7 +838,7 @@ render();
       <h2>📋 Výdajka</h2>
       <span id="vyd-number" style="font-family:monospace;font-size:12px;color:#9a9bb0"></span>
       <div style="flex:1"></div>
-      <button class="btn" style="background:#27ae60;color:#fff;padding:6px 14px" onclick="saveVydajka('pdf')">📄 PDF</button>
+      <button class="btn" style="background:#27ae60;color:#fff;padding:6px 14px" onclick="openVydNahlad()">👁 Náhľad &amp; PDF</button>
       <button class="btn" style="background:#4f7cff;color:#fff;padding:6px 14px;margin-left:6px" onclick="saveVydajka('save')">💾 Uložiť</button>
       <button class="btn btn-gray" style="margin-left:6px;padding:6px 14px" onclick="closeVydajka()">✕ Zavrieť</button>
     </div>
@@ -1111,23 +1112,38 @@ function renderVydLines() {
 
   tbody.innerHTML = vydLines.map((l, i) => {
     const badge = `<span class="badge badge-${typClass(l.typ)}">${shortType(l.typ)}</span>`;
-    const qClass = (parseFloat(l.vydQty)||0) > l.stockMax ? 'qty-zero' : 'qty-ok';
+    // Pre rúry: vydané = dlzka/1000 m; pre fittingy: vydané = vydQty ks
+    const vydane = l.isPipe
+      ? (parseFloat(l.dlzka)||0) / 1000
+      : (parseFloat(l.vydQty)||0);
+    const overMax = vydane > l.stockMax;
+    const qClass = overMax ? 'qty-zero' : 'qty-ok';
+
+    // Stĺpec "Vydané" — pre rúry vypočítaný z mm, pre fittingy editovateľný
+    const vydCell = l.isPipe
+      ? `<td style="text-align:center"><span class="${qClass}" style="font-weight:700">${vydane.toFixed(3)} m</span><br><span style="font-size:10px;color:#aaa">(z ${l.dlzka||0} mm)</span></td>`
+      : `<td><input class="vyd-inline-inp" style="width:65px" type="number" min="0" step="1"
+            value="${l.vydQty}" placeholder="0"
+            oninput="vydLines[${i}].vydQty=parseFloat(this.value)||0;renderVydLines()"></td>`;
+
     const pipeExtra = hasPipe
-      ? `<td>${l.isPipe ? `<input class="vyd-inline-inp" style="width:75px" value="${l.dlzka||''}" placeholder="mm" oninput="vydLines[${i}].dlzka=this.value">` : '—'}</td>
-         <td>${l.isPipe ? `<input class="vyd-inline-inp" style="width:75px" value="${l.spCislo||''}" placeholder="SP-xxx" oninput="vydLines[${i}].spCislo=this.value">` : '—'}</td>`
+      ? `<td>${l.isPipe
+          ? `<input class="vyd-inline-inp" style="width:80px" value="${l.dlzka||''}" placeholder="napr. 3200"
+               oninput="vydLines[${i}].dlzka=this.value;renderVydLines()">`
+          : '—'}</td>
+         <td>${l.isPipe
+          ? `<input class="vyd-inline-inp" style="width:75px" value="${l.spCislo||''}" placeholder="SP-xxx"
+               oninput="vydLines[${i}].spCislo=this.value">`
+          : '—'}</td>`
       : '';
-    return `<tr>
+
+    return `<tr${overMax ? ' style="background:#fff5f5"' : ''}>
       <td>${badge}<br><span style="font-size:10px;color:#555">${l.typ}</span></td>
       <td style="font-family:monospace;font-weight:700">${l.rozmer}</td>
       <td style="font-family:monospace;font-size:11px">${l.material||'—'}</td>
       <td style="font-family:monospace;font-size:11px">${l.tavba||'—'}</td>
       <td style="text-align:center;color:#888">—</td>
-      <td>
-        <input class="vyd-inline-inp" style="width:65px" type="number" min="0" step="${l.isPipe?'0.001':'1'}"
-          value="${l.vydQty}" placeholder="0"
-          oninput="vydLines[${i}].vydQty=parseFloat(this.value)||0;updateVydCount()"
-        >
-      </td>
+      ${vydCell}
       <td style="text-align:center">${l.jednotka}</td>
       ${pipeExtra}
       <td><button class="act-btn del" onclick="removeVydLine(${i})">✕</button></td>
@@ -1164,22 +1180,29 @@ function saveVydajka(mode) {
   const cislo = document.getElementById('vyd-number').textContent;
   const datum = new Date().toISOString().split('T')[0];
 
-  // Odpočítaj zo skladu
+  // Odpočítaj zo skladu — rúry: mm ÷ 1000 → metre
   vydLines.forEach(l => {
-    const qty = parseFloat(l.vydQty) || 0;
-    if (qty > 0 && l.itemIdx !== undefined) {
+    if (l.itemIdx === undefined) return;
+    const vydane = l.isPipe
+      ? (parseFloat(l.dlzka) || 0) / 1000   // mm → m
+      : (parseFloat(l.vydQty) || 0);          // ks
+    if (vydane > 0) {
       const cur = parseFloat(items[l.itemIdx].zostatok) || 0;
-      items[l.itemIdx].zostatok = Math.round((cur - qty) * 10000) / 10000;
+      items[l.itemIdx].zostatok = Math.round((cur - vydane) * 10000) / 10000;
     }
   });
 
   // Ulož výdajku
   const vydajka = {
     cislo, iso: vydIso, sec: vydIsoSec, datum,
+    vytvoril: '', // bude doplnené pri PDF
     lines: vydLines.map(l => ({
       typ: l.typ, rozmer: l.rozmer, material: l.material,
       norma: l.norma, tavba: l.tavba, jednotka: l.jednotka,
-      vydQty: l.vydQty, dlzka: l.dlzka||'', spCislo: l.spCislo||''
+      isPipe: l.isPipe || false,
+      vydQty: l.isPipe ? (parseFloat(l.dlzka)||0)/1000 : (parseFloat(l.vydQty)||0),
+      dlzka: l.dlzka || '',
+      spCislo: l.spCislo || ''
     }))
   };
   vydajkyList.push(vydajka);
@@ -1188,61 +1211,370 @@ function saveVydajka(mode) {
   render();
 
   if (mode === 'pdf') exportVydajkaPdf(vydajka);
+  if (mode === 'save') {
+    setStatus(`✓ Výdajka ${cislo} uložená (${vydLines.length} položiek, izometria: ${vydIso})`, 'ok');
+    document.getElementById('vyd-overlay').classList.remove('open');
+  }
+}
 
-  setStatus(`✓ Výdajka ${cislo} uložená (${vydLines.length} položiek, izometria: ${vydIso})`, 'ok');
-  document.getElementById('vyd-overlay').classList.remove('open');
+// ─── NÁHĽAD VÝDAJKY (modálne okno) ───────────
+function openVydNahlad() {
+  if (!vydIso) { alert('Vyberte izometriu'); return; }
+  if (!vydLines.length) { alert('Výdajka je prázdna'); return; }
+
+  const cislo = document.getElementById('vyd-number').textContent;
+  const datum = new Date().toISOString().split('T')[0];
+  const hasPipe = vydLines.some(l => l.isPipe);
+
+  // Zostavenie riadkov tabuľky — rovnaký formát ako vzorový Excel
+  let pos = 1;
+  const rows = vydLines.map(l => {
+    const vydane = l.isPipe
+      ? ((parseFloat(l.dlzka)||0) / 1000).toFixed(3)
+      : (parseFloat(l.vydQty)||0);
+    const spCell  = l.isPipe ? (l.spCislo || '') : '';
+    const mmCell  = l.isPipe ? (l.dlzka   || '') : '';
+    return `<tr>
+      <td class="c"></td>
+      <td class="c">${pos++}</td>
+      <td>${l.typ}</td>
+      <td>${l.norma||''}</td>
+      <td class="mono">${l.rozmer}${mmCell ? '<br><span style="color:#888;font-size:9px">'+mmCell+' mm</span>' : ''}</td>
+      <td class="mono">${l.material||''}</td>
+      <td class="c">—</td>
+      <td class="c bold">${vydane}</td>
+      <td class="c">${datum}</td>
+      <td></td>
+      <td class="mono">${l.tavba||''}</td>
+      ${hasPipe ? `<td class="c">${spCell}</td>` : ''}
+    </tr>`;
+  }).join('');
+
+  const thPipe = hasPipe ? '<th>SP No.</th>' : '';
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>${cislo}</title>
+<style>
+  @page { size: A4 landscape; margin: 10mm 12mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; font-size: 10px; background: #fff; margin: 0; padding: 0; }
+  .page { width: 100%; padding: 4px; }
+
+  /* Hlavička dokumentu */
+  .doc-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 6px; border-bottom: 2px solid #1a1a2e; padding-bottom: 6px; }
+  .doc-title { font-size: 14px; font-weight: 700; letter-spacing: 0.04em; color: #1a1a2e; }
+  .doc-sub { font-size: 9px; color: #666; margin-top: 2px; }
+  .doc-meta { text-align: right; font-size: 9px; color: #444; line-height: 1.7; }
+  .doc-meta strong { color: #1a1a2e; }
+
+  /* Nadpis sekcie */
+  .section-bar {
+    background: #1a1a2e; color: #fff; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.08em; padding: 4px 8px; margin-bottom: 0;
+    text-transform: uppercase;
+  }
+
+  /* Tabuľka */
+  table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
+  thead th {
+    background: #2c3e6b; color: #e0e8ff;
+    padding: 5px 6px; text-align: left;
+    font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.05em;
+    border: 1px solid #1a1a2e; white-space: nowrap;
+  }
+  td { padding: 4px 6px; border: 1px solid #d0d4dc; vertical-align: middle; }
+  tbody tr:nth-child(even) td { background: #f4f6fb; }
+  tbody tr:hover td { background: #e8eeff; }
+  td.c { text-align: center; }
+  td.mono { font-family: 'Courier New', monospace; font-size: 9px; }
+  td.bold { font-weight: 700; font-size: 11px; }
+
+  /* Footer */
+  .doc-footer { margin-top: 10px; display: flex; gap: 30px; font-size: 9px; color: #666; border-top: 1px solid #ccc; padding-top: 6px; }
+  .sign-box { flex: 1; }
+  .sign-line { border-bottom: 1px solid #999; height: 24px; margin-bottom: 3px; }
+
+  /* Print tlačidlo - skryté pri tlači */
+  .print-bar { background: #1a1a2e; padding: 10px 16px; display: flex; align-items: center; gap: 10px; }
+  .print-bar button { padding: 8px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 13px; font-weight: 700; }
+  .btn-print { background: #27ae60; color: #fff; }
+  .btn-close { background: #e4e8ef; color: #333; }
+  @media print {
+    .print-bar { display: none !important; }
+    body { font-size: 9px; }
+  }
+</style>
+</head>
+<body>
+<div class="print-bar">
+  <span style="color:#fff;font-weight:700;font-size:14px">📋 ${cislo}</span>
+  <span style="color:#9a9bb0;font-size:12px">· ${vydIso}</span>
+  <div style="flex:1"></div>
+  <button class="btn-print" onclick="window.print()">🖨️ Tlačiť / Uložiť PDF</button>
+  <button class="btn-close" onclick="window.close()">✕ Zavrieť</button>
+</div>
+<div class="page">
+  <div class="doc-header">
+    <div>
+      <div class="doc-title">FABRICATION MATERIALS ISSUE SLIP</div>
+      <div class="doc-sub">PMP Montex s.r.o. &nbsp;·&nbsp; Výdajka materiálu z výrobného skladu</div>
+    </div>
+    <div class="doc-meta">
+      <strong>Číslo výdajky:</strong> ${cislo}<br>
+      <strong>Izometria:</strong> ${vydIso}<br>
+      <strong>Sekcia:</strong> ${vydIsoSec||'—'}<br>
+      <strong>Dátum:</strong> ${datum}
+    </div>
+  </div>
+
+  <div class="section-bar">FABRICATION MATERIALS</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:22px">Page</th>
+        <th style="width:28px">Pos.</th>
+        <th style="min-width:140px">Part Description</th>
+        <th style="min-width:120px">Standard</th>
+        <th style="min-width:90px">Dimensions</th>
+        <th style="width:70px">Material</th>
+        <th style="width:55px">QTY Izom.</th>
+        <th style="width:60px">Issued QTY</th>
+        <th style="width:65px">Date</th>
+        <th style="width:60px">Name</th>
+        <th style="min-width:80px">Heat Number</th>
+        ${thPipe}
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+    </tbody>
+  </table>
+
+  <div class="doc-footer">
+    <div class="sign-box"><div class="sign-line"></div>Vydal / Issued by</div>
+    <div class="sign-box"><div class="sign-line"></div>Prevzal / Received by</div>
+    <div class="sign-box"><div class="sign-line"></div>Dátum prevzatia / Date received</div>
+    <div style="flex:2;text-align:right;color:#bbb;font-size:8px">
+      Generované: ${new Date().toLocaleString('sk-SK')} &nbsp;·&nbsp; SkaldManager v0.2 · PMP Montex
+    </div>
+  </div>
+</div>
+</body></html>`;
+
+  // Otvor v novom okne (landscape)
+  const win = window.open('', '_blank', 'width=1100,height=700,scrollbars=yes');
+  win.document.write(html);
+  win.document.close();
 }
 
 function exportVydajkaPdf(v) {
-  // Jednoduchý HTML print
-  const win = window.open('', '_blank');
-  const hasPipe = v.lines.some(l => l.isPipe || (l.typ||'').toLowerCase().includes('pipe'));
-  const rows = v.lines.map((l,i) => `
-    <tr>
-      <td>${i+1}</td>
+  // Zostatok pre kompatibilitu — otvor náhľad z uloženej výdajky
+  openVydNahladFromData(v);
+}
+
+function openVydNahladFromData(v) {
+  // Rovnaký render ako openVydNahlad ale z uložených dát
+  const hasPipe = v.lines.some(l => l.isPipe);
+  let pos = 1;
+  const rows = v.lines.map(l => {
+    const mmCell = l.isPipe && l.dlzka ? `<br><span style="color:#888;font-size:9px">${l.dlzka} mm</span>` : '';
+    const spCell = l.isPipe ? (l.spCislo||'') : '';
+    const vydane = l.isPipe
+      ? (typeof l.vydQty === 'number' ? l.vydQty.toFixed(3) : l.vydQty)
+      : l.vydQty;
+    return `<tr>
+      <td class="c"></td>
+      <td class="c">${pos++}</td>
       <td>${l.typ}</td>
-      <td>${l.rozmer}</td>
-      <td>${l.material||''}</td>
       <td>${l.norma||''}</td>
-      <td>${l.tavba||''}</td>
-      <td style="text-align:center">—</td>
-      <td style="text-align:center;font-weight:bold">${l.vydQty}</td>
-      <td style="text-align:center">${l.jednotka}</td>
-      ${hasPipe ? `<td style="text-align:center">${l.dlzka||''}</td><td>${l.spCislo||''}</td>` : ''}
-    </tr>`).join('');
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-    <title>${v.cislo}</title>
-    <style>
-      body{font-family:Arial,sans-serif;font-size:11px;padding:20px}
-      h2{font-size:15px;margin-bottom:4px}
-      .meta{color:#666;font-size:11px;margin-bottom:16px}
-      table{width:100%;border-collapse:collapse}
-      th{background:#1a1a2e;color:#fff;padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase}
-      td{padding:5px 8px;border-bottom:1px solid #eee}
-      tr:hover td{background:#f5f5ff}
-      @media print{body{padding:0}}
-    </style></head><body>
-    <h2>FABRICATION MATERIALS ISSUE SLIP &nbsp;·&nbsp; ${v.cislo}</h2>
-    <div class="meta">Izometria: <strong>${v.iso}</strong> &nbsp;|&nbsp; Sekcia: ${v.sec||''} &nbsp;|&nbsp; Dátum: ${v.datum}</div>
-    <table>
-      <thead><tr>
-        <th>#</th><th>Typ</th><th>Rozmer</th><th>Materiál</th><th>Norma</th>
-        <th>Tavba</th><th>Qty Izom.</th><th>Vydané</th><th>Jed.</th>
-        ${hasPipe ? '<th>Dĺžka (mm)</th><th>SP č.</th>' : ''}
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <script>window.onload=()=>{window.print();}<\/script>
-    </body></html>`);
+      <td class="mono">${l.rozmer}${mmCell}</td>
+      <td class="mono">${l.material||''}</td>
+      <td class="c">—</td>
+      <td class="c bold">${vydane}</td>
+      <td class="c">${v.datum}</td>
+      <td></td>
+      <td class="mono">${l.tavba||''}</td>
+      ${hasPipe ? `<td class="c">${spCell}</td>` : ''}
+    </tr>`;
+  }).join('');
+
+  const thPipe = hasPipe ? '<th>SP No.</th>' : '';
+  const html = buildVydPdfHtml(v.cislo, v.iso, v.sec||'', v.datum, rows, thPipe);
+  const win = window.open('', '_blank', 'width=1100,height=700,scrollbars=yes');
+  win.document.write(html);
   win.document.close();
 }
+
+function buildVydPdfHtml(cislo, iso, sec, datum, rows, thPipe) {
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>${cislo}</title>
+<style>
+  @page { size: A4 landscape; margin: 10mm 12mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; font-size: 10px; background: #fff; margin: 0; padding: 0; }
+  .page { width: 100%; padding: 4px; }
+  .doc-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 6px; border-bottom: 2px solid #1a1a2e; padding-bottom: 6px; }
+  .doc-title { font-size: 14px; font-weight: 700; letter-spacing: 0.04em; color: #1a1a2e; }
+  .doc-sub { font-size: 9px; color: #666; margin-top: 2px; }
+  .doc-meta { text-align: right; font-size: 9px; color: #444; line-height: 1.7; }
+  .doc-meta strong { color: #1a1a2e; }
+  .section-bar { background: #1a1a2e; color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; padding: 4px 8px; text-transform: uppercase; }
+  table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
+  thead th { background: #2c3e6b; color: #e0e8ff; padding: 5px 6px; text-align: left; font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid #1a1a2e; white-space: nowrap; }
+  td { padding: 4px 6px; border: 1px solid #d0d4dc; vertical-align: middle; }
+  tbody tr:nth-child(even) td { background: #f4f6fb; }
+  td.c { text-align: center; }
+  td.mono { font-family: 'Courier New', monospace; font-size: 9px; }
+  td.bold { font-weight: 700; font-size: 11px; }
+  .doc-footer { margin-top: 10px; display: flex; gap: 30px; font-size: 9px; color: #666; border-top: 1px solid #ccc; padding-top: 6px; }
+  .sign-box { flex: 1; }
+  .sign-line { border-bottom: 1px solid #999; height: 24px; margin-bottom: 3px; }
+  .print-bar { background: #1a1a2e; padding: 10px 16px; display: flex; align-items: center; gap: 10px; }
+  .print-bar button { padding: 8px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 13px; font-weight: 700; }
+  .btn-print { background: #27ae60; color: #fff; }
+  .btn-close { background: #e4e8ef; color: #333; }
+  @media print { .print-bar { display: none !important; } }
+</style></head><body>
+<div class="print-bar">
+  <span style="color:#fff;font-weight:700;font-size:14px">📋 ${cislo}</span>
+  <span style="color:#9a9bb0;font-size:12px">· ${iso}</span>
+  <div style="flex:1"></div>
+  <button class="btn-print" onclick="window.print()">🖨️ Tlačiť / Uložiť PDF</button>
+  <button class="btn-close" onclick="window.close()">✕ Zavrieť</button>
+</div>
+<div class="page">
+  <div class="doc-header">
+    <div>
+      <div class="doc-title">FABRICATION MATERIALS ISSUE SLIP</div>
+      <div class="doc-sub">PMP Montex s.r.o. &nbsp;·&nbsp; Výdajka materiálu z výrobného skladu</div>
+    </div>
+    <div class="doc-meta">
+      <strong>Číslo výdajky:</strong> ${cislo}<br>
+      <strong>Izometria:</strong> ${iso}<br>
+      <strong>Sekcia:</strong> ${sec||'—'}<br>
+      <strong>Dátum:</strong> ${datum}
+    </div>
+  </div>
+  <div class="section-bar">FABRICATION MATERIALS</div>
+  <table>
+    <thead><tr>
+      <th style="width:22px">Page</th>
+      <th style="width:28px">Pos.</th>
+      <th style="min-width:140px">Part Description</th>
+      <th style="min-width:120px">Standard</th>
+      <th style="min-width:90px">Dimensions</th>
+      <th style="width:70px">Material</th>
+      <th style="width:55px">QTY Izom.</th>
+      <th style="width:60px">Issued QTY</th>
+      <th style="width:65px">Date</th>
+      <th style="width:60px">Name</th>
+      <th style="min-width:80px">Heat Number</th>
+      ${thPipe}
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="doc-footer">
+    <div class="sign-box"><div class="sign-line"></div>Vydal / Issued by</div>
+    <div class="sign-box"><div class="sign-line"></div>Prevzal / Received by</div>
+    <div class="sign-box"><div class="sign-line"></div>Dátum prevzatia / Date received</div>
+    <div style="flex:2;text-align:right;color:#bbb;font-size:8px">Generované: ${new Date().toLocaleString('sk-SK')} &nbsp;·&nbsp; SkaldManager v0.2</div>
+  </div>
+</div>
+</body></html>`;
+}
 </script>
+
+<!-- ZOZNAM VÝDAJOK MODAL -->
+<div id="zoznam-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1500;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;width:92vw;max-width:960px;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.25);overflow:hidden">
+    <div style="background:#1a1a2e;color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0">
+      <span style="font-size:15px;font-weight:700">📋 História výdajok</span>
+      <span id="zoznam-count" style="font-size:11px;color:#9a9bb0"></span>
+      <div style="flex:1"></div>
+      <button onclick="document.getElementById('zoznam-overlay').style.display='none'"
+        style="background:none;border:1px solid #555;color:#ccc;padding:5px 14px;border-radius:5px;cursor:pointer;font-size:13px">✕ Zavrieť</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:14px 18px">
+      <div id="zoznam-empty" style="display:none;text-align:center;padding:40px;color:#aaa;font-size:13px">Žiadne výdajky ešte neboli uložené.</div>
+      <table id="zoznam-table" style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="background:#f0f2f5">
+            <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#666;border-bottom:2px solid #dde1e7;white-space:nowrap">Číslo výdajky</th>
+            <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#666;border-bottom:2px solid #dde1e7">Izometria</th>
+            <th style="padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;color:#666;border-bottom:2px solid #dde1e7">Sekcia</th>
+            <th style="padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;color:#666;border-bottom:2px solid #dde1e7">Dátum</th>
+            <th style="padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;color:#666;border-bottom:2px solid #dde1e7">Položky</th>
+            <th style="padding:8px 10px;border-bottom:2px solid #dde1e7"></th>
+          </tr>
+        </thead>
+        <tbody id="zoznam-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <script>
+function openVydajkyZoznam() {
+  const list = vydajkyList;
+  const tbody = document.getElementById('zoznam-tbody');
+  document.getElementById('zoznam-count').textContent = list.length + ' výdajok';
+
+  if (!list.length) {
+    tbody.innerHTML = '';
+    document.getElementById('zoznam-empty').style.display = 'block';
+    document.getElementById('zoznam-table').style.display = 'none';
+  } else {
+    document.getElementById('zoznam-empty').style.display = 'none';
+    document.getElementById('zoznam-table').style.display = 'table';
+    tbody.innerHTML = [...list].reverse().map((v, ri) => {
+      const realIdx = list.length - 1 - ri;
+      const lineCount = (v.lines||[]).length;
+      return `<tr style="border-bottom:1px solid #eef0f4" onmouseover="this.style.background='#f5f7ff'" onmouseout="this.style.background=''">
+        <td style="padding:8px 10px;font-family:monospace;font-weight:700;color:#4f7cff">${v.cislo}</td>
+        <td style="padding:8px 10px;font-family:monospace;font-size:11px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.iso}</td>
+        <td style="padding:8px 10px;text-align:center">
+          <span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700">${v.sec||'—'}</span>
+        </td>
+        <td style="padding:8px 10px;text-align:center;color:#666">${v.datum}</td>
+        <td style="padding:8px 10px;text-align:center;font-weight:700">${lineCount}</td>
+        <td style="padding:8px 10px;white-space:nowrap;text-align:right">
+          <button class="act-btn" onclick="openVydNahladFromData(vydajkyList[${realIdx}])" style="color:#4f7cff;border-color:#4f7cff">👁 Náhľad / PDF</button>
+          <button class="act-btn del" onclick="deleteVydajka(${realIdx})">🗑 Vymazať</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+  document.getElementById('zoznam-overlay').style.display = 'flex';
+}
+
+function deleteVydajka(idx) {
+  const v = vydajkyList[idx];
+  if (!v) return;
+  if (!confirm('Vymazať výdajku ' + v.cislo + '?\nMnožstvá sa vrátia späť do skladu.')) return;
+  (v.lines||[]).forEach(l => {
+    const found = items.findIndex(it => it.typ === l.typ && it.rozmer === l.rozmer && it.tavba === l.tavba);
+    if (found >= 0) {
+      const qty = parseFloat(l.vydQty) || 0;
+      items[found].zostatok = Math.round(((parseFloat(items[found].zostatok)||0) + qty) * 10000) / 10000;
+    }
+  });
+  vydajkyList.splice(idx, 1);
+  save();
+  localStorage.setItem('vydajky', JSON.stringify(vydajkyList));
+  render();
+  openVydajkyZoznam();
+  setStatus('Výdajka ' + v.cislo + ' vymazaná, množstvá vrátené do skladu.', 'ok');
+}
+
+// Event listenery pre modaly
 document.getElementById('merge-info-overlay').addEventListener('click', function(e) {
   if (e.target === this) this.classList.remove('open');
 });
 document.getElementById('vyd-overlay').addEventListener('click', function(e) {
   if (e.target === this) closeVydajka();
+});
+document.getElementById('zoznam-overlay').addEventListener('click', function(e) {
+  if (e.target === this) this.style.display = 'none';
 });
 </script>
 </body>
