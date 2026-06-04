@@ -379,24 +379,26 @@ function parseHtml(html, filename) {
       const norma  = cells[2] || '';
       if (!desc || !rozmer) continue;
 
-      // Qty a tavba — hľadaj v bunkách 3+
+      // Qty a tavba — štruktúra: ...| qty | ✓ | tavba |
+      // qty = prvé číslo v bunkách 3+
+      // tavba = posledná neprázdna bunka po qty (môže byť číslo aj text)
       let qty = 0, tavba = '';
+      let qtyFound = false;
       for (let i = 3; i < cells.length; i++) {
         const raw = cells[i];
         if (!raw) continue;
         const cleaned = raw.replace(/[✓√\s]/g, '');
         if (!cleaned) continue;
 
-        // Číslo = qty
-        const num = cleaned.replace(',', '.').match(/^(\d+\.?\d*)/);
-        if (num && qty === 0) {
-          qty = parseFloat(num[1]) || 0;
+        if (!qtyFound) {
+          // Qty — prvé číslo
+          const num = cleaned.replace(',', '.').match(/^(\d+\.?\d*)/);
+          if (num) { qty = parseFloat(num[1]) || 0; qtyFound = true; }
           continue;
         }
-        // Tavba = alfanumerický reťazec 4+ znakov, môže obsahovať / -
-        if (!tavba && cleaned.length >= 4 && !/^[\d.,]+$/.test(cleaned)) {
-          tavba = cleaned;
-        }
+        // Po qty — tavba je posledná neprázdna hodnota
+        // môže byť číslo (54743) aj alfanumerická (C421449, S019757/1)
+        tavba = cleaned;
       }
 
       if (qty === 0) continue;
