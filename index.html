@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sklad — PMP Montex</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, sans-serif; background: #f0f2f5; color: #1a1a2e; font-size: 14px; }
+
+header {
+  background: #1a1a2e; color: #fff; padding: 14px 24px;
+  display: flex; align-items: center; gap: 16px;
+}
+header h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.03em; }
+header h1 span { color: #4f7cff; }
+header .sub { font-size: 12px; color: #9a9bb0; }
+
+.toolbar {
+  background: #fff; border-bottom: 1px solid #dde1e7;
+  padding: 12px 24px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+}
+
+.btn {
+  padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer;
+  font-size: 13px; font-weight: 600; transition: opacity 0.15s;
+}
+.btn:hover { opacity: 0.85; }
+.btn-blue  { background: #4f7cff; color: #fff; }
+.btn-gray  { background: #e4e8ef; color: #333; }
+.btn-green { background: #27ae60; color: #fff; }
+.btn-red   { background: #e74c3c; color: #fff; }
+
+.file-wrap { position: relative; }
+.file-wrap input[type=file] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+}
+
+.filters {
+  background: #fff; border-bottom: 1px solid #dde1e7;
+  padding: 10px 24px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+}
+.filters label { font-size: 12px; color: #666; }
+.filters input, .filters select {
+  padding: 6px 10px; border: 1px solid #ccc; border-radius: 5px;
+  font-size: 13px; outline: none; background: #fff;
+}
+.filters input:focus, .filters select:focus { border-color: #4f7cff; }
+
+#status-bar {
+  padding: 8px 24px; font-size: 12px; color: #555;
+  background: #f7f8fa; border-bottom: 1px solid #dde1e7;
+  display: flex; gap: 16px; align-items: center;
+}
+.status-ok   { color: #27ae60; font-weight: 600; }
+.status-err  { color: #e74c3c; font-weight: 600; }
+.status-info { color: #4f7cff; font-weight: 600; }
+
+/* PREVIEW */
+#preview-wrap {
+  display: none; background: #fff; border-bottom: 2px solid #4f7cff;
+  padding: 16px 24px;
+}
+#preview-wrap h3 { font-size: 14px; margin-bottom: 10px; }
+.preview-scroll { max-height: 260px; overflow-y: auto; border: 1px solid #dde1e7; border-radius: 6px; }
+.preview-scroll table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.preview-scroll th {
+  background: #f0f2f5; padding: 7px 10px; text-align: left;
+  font-size: 11px; text-transform: uppercase; color: #666; position: sticky; top: 0;
+}
+.preview-scroll td { padding: 5px 10px; border-bottom: 1px solid #eee; }
+.preview-scroll tr:last-child td { border-bottom: none; }
+.preview-actions { display: flex; gap: 10px; margin-top: 12px; justify-content: flex-end; }
+.merge-check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #444; }
+
+/* TABLE */
+.table-wrap { overflow-x: auto; padding: 0 24px 24px; margin-top: 16px; }
+table.main { width: 100%; border-collapse: collapse; background: #fff;
+  border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+table.main thead th {
+  background: #1a1a2e; color: #c8cad8; padding: 10px 12px;
+  text-align: left; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.06em; white-space: nowrap;
+}
+table.main tbody tr { border-bottom: 1px solid #eef0f4; transition: background 0.1s; }
+table.main tbody tr:hover { background: #f5f7ff; }
+table.main td { padding: 8px 12px; font-size: 13px; }
+table.main td.mono { font-family: monospace; font-size: 12px; }
+table.main td.center { text-align: center; }
+.empty-row td { text-align: center; padding: 40px; color: #aaa; }
+
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 3px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; white-space: nowrap;
+}
+.badge-pipe    { background: #dbeafe; color: #1d4ed8; }
+.badge-elbow   { background: #ede9fe; color: #6d28d9; }
+.badge-reducer { background: #ffedd5; color: #c2410c; }
+.badge-flange  { background: #dcfce7; color: #15803d; }
+.badge-tee     { background: #ccfbf1; color: #0f766e; }
+.badge-cap     { background: #fae8ff; color: #7e22ce; }
+.badge-other   { background: #f1f5f9; color: #475569; }
+
+.qty { font-weight: 700; }
+.qty-ok   { color: #16a34a; }
+.qty-low  { color: #d97706; }
+.qty-zero { color: #dc2626; }
+
+.act-btn {
+  background: none; border: 1px solid #ddd; border-radius: 4px;
+  padding: 3px 8px; cursor: pointer; font-size: 12px; margin: 0 2px;
+  transition: all 0.15s;
+}
+.act-btn:hover { background: #f0f2f5; }
+.act-btn.del:hover { border-color: #e74c3c; color: #e74c3c; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Sklad <span>materiálu</span></h1>
+    <div class="sub">PMP Montex · v0.1</div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <!-- Import docx -->
+  <div class="file-wrap">
+    <button class="btn btn-blue">📂 Nahrať dodací list (.docx)</button>
+    <input type="file" accept=".docx" onchange="importDocx(event)">
+  </div>
+  <button class="btn btn-gray" onclick="openAddModal()">+ Pridať ručne</button>
+  <button class="btn btn-gray" onclick="exportCSV()">⬇ Export CSV</button>
+  <span style="flex:1"></span>
+  <button class="btn btn-red" onclick="clearAll()">🗑 Vymazať všetko</button>
+</div>
+
+<div class="filters">
+  <label>Typ:</label>
+  <select id="f-typ" onchange="render()"><option value="">— všetky —</option></select>
+  <label>Rozmer:</label>
+  <input id="f-rozmer" placeholder="napr. 114.3" oninput="render()">
+  <label>Materiál:</label>
+  <input id="f-mat" placeholder="napr. P235GH" oninput="render()">
+  <button class="btn btn-gray" onclick="clearFilters()">× Vyčistiť</button>
+</div>
+
+<div id="status-bar">
+  <span id="status-text">Pripravený. Nahrajte dodací list (.docx).</span>
+  <span id="count-text"></span>
+</div>
+
+<!-- IMPORT PREVIEW -->
+<div id="preview-wrap">
+  <h3 id="preview-title">Náhľad importu</h3>
+  <div class="preview-scroll">
+    <table id="preview-table"></table>
+  </div>
+  <div style="margin-top:8px; display:flex; align-items:center; gap:20px;">
+    <label class="merge-check">
+      <input type="checkbox" id="merge-chk" checked>
+      Zlúčiť s existujúcimi (pripočítať množstvo ak rovnaký typ+rozmer+tavba)
+    </label>
+    <div class="preview-actions">
+      <button class="btn btn-gray" onclick="cancelPreview()">Zrušiť</button>
+      <button class="btn btn-green" onclick="confirmImport()">✓ Importovať do skladu</button>
+    </div>
+  </div>
+</div>
+
+<!-- HLAVNÁ TABUĽKA -->
+<div class="table-wrap">
+  <table class="main" id="main-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Typ</th>
+        <th>Rozmer</th>
+        <th>Materiál</th>
+        <th>Norma</th>
+        <th>Zostatok</th>
+        <th>Jed.</th>
+        <th>Tavba</th>
+        <th>Dodací list</th>
+        <th>Dátum</th>
+        <th>Akcie</th>
+      </tr>
+    </thead>
+    <tbody id="main-tbody">
+      <tr class="empty-row"><td colspan="11">Sklad je prázdny. Nahrajte dodací list.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- MODAL: ručné pridanie -->
+<div id="modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:999; align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:10px; padding:28px 32px; width:480px; max-height:90vh; overflow-y:auto;">
+    <h2 style="font-size:16px; margin-bottom:18px;" id="modal-title">Pridať materiál</h2>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+      <div style="grid-column:1/-1">
+        <label style="font-size:11px;color:#666;text-transform:uppercase;display:block;margin-bottom:4px">Typ *</label>
+        <input id="m-typ" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:5px;font-size:13px" placeholder="napr. Elbow Type A, 3D (r=1.5xD)">
+      </div>
+      <div>
+        <label style="font-size:11px;color:#666;text-transform:uppercase;display:block;margin-bottom:4px">Rozmer *</label>
+        <input id="m-rozmer" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:5px;font-size:13px" placeholder="114.3x3.6">
+      </div>
+      <div>
+        <label style="font-size:11px;color:#666;text-transform:uppercase;display:block;margin-bottom:4px">Materiál</label>
+        <input id="m-material" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:5px;font-size:13px" placeholder="P235GH">
+      </div>
+      <div style="grid-column:1/-1">
+        <label style="font-size:11px;color:#666;text-transform:uppercase;display:block;margin-bottom:4px">Norma</label>
+        <input id="m-norma" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:5px;font-size:13px" placeholder="P235GH, EN 10253-2, 3.1">
+      </div>
+      <div>
+        <label style="font-size:11px;color:#666;text-transform:uppercase;display:block;margin-bottom:4px">Zostatok</label>
+        <input id="m-zostatok" type="number" min="0" step="0.001" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:5px;font-size:13px" placeholder="0">
+      </div>
+      <div>
+        <label style="font-size:11px;color:#666;text-transform:uppercase;display:block;margin-bottom:4px">Jednotka</label>
+        <select id="m-jednotka" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+          <option value="ks">ks</option>
+          <option value="m">m</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:11px;color:#666;text-transform:uppercase;display:block;margin-bottom:4px">Tavba</label>
+        <input id="m-tavba" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:5px;font-size:13px" placeholder="R61462">
+      </div>
+      <div>
+        <label style="font-size:11px;color:#666;text-transform:uppercase;display:block;margin-bottom:4px">Dodací list</label>
+        <input id="m-dl" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:5px;font-size:13px" placeholder="DL2026/26001/022">
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px">
+      <button class="btn btn-gray" onclick="closeModal()">Zrušiť</button>
+      <button class="btn btn-blue" onclick="saveModal()">Uložiť</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── DÁTA (localStorage) ───────────────────────
+let items = JSON.parse(localStorage.getItem('sklad_items') || '[]');
+let editIdx = null;
+let previewItems = [];
+
+function save() {
+  localStorage.setItem('sklad_items', JSON.stringify(items));
+}
+
+// ─── RENDER TABUĽKY ───────────────────────────
+function render() {
+  const fTyp    = document.getElementById('f-typ').value.toLowerCase();
+  const fRozmer = document.getElementById('f-rozmer').value.toLowerCase();
+  const fMat    = document.getElementById('f-mat').value.toLowerCase();
+
+  const filtered = items.filter(it =>
+    (!fTyp    || it.typ.toLowerCase().includes(fTyp)) &&
+    (!fRozmer || it.rozmer.toLowerCase().includes(fRozmer)) &&
+    (!fMat    || (it.material||'').toLowerCase().includes(fMat))
+  );
+
+  document.getElementById('count-text').textContent =
+    `Zobrazených: ${filtered.length} / ${items.length} položiek`;
+
+  const tbody = document.getElementById('main-tbody');
+
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="11">${
+      items.length ? 'Žiadne výsledky pre filter.' : 'Sklad je prázdny. Nahrajte dodací list.'
+    }</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map((it, i) => {
+    const realIdx = items.indexOf(it);
+    const q = parseFloat(it.zostatok) || 0;
+    const qClass = q === 0 ? 'qty-zero' : (it.jednotka==='m'&&q<5)||(it.jednotka==='ks'&&q<2) ? 'qty-low' : 'qty-ok';
+    const qStr = it.jednotka==='m' ? q.toFixed(2) : String(q);
+    return `<tr>
+      <td class="center" style="color:#aaa;font-size:12px">${i+1}</td>
+      <td><span class="badge badge-${typClass(it.typ)}">${shortType(it.typ)}</span><br>
+          <span style="font-size:11px;color:#555">${it.typ}</span></td>
+      <td class="mono">${it.rozmer}</td>
+      <td class="mono">${it.material||'—'}</td>
+      <td style="font-size:11px;color:#666">${it.norma||'—'}</td>
+      <td class="center"><span class="qty ${qClass}">${qStr}</span></td>
+      <td class="center" style="color:#666">${it.jednotka||'ks'}</td>
+      <td class="mono" style="font-size:11px">${it.tavba||'—'}</td>
+      <td style="font-size:11px">${it.zdroj_dl||'—'}</td>
+      <td style="font-size:11px;color:#888">${it.datum||'—'}</td>
+      <td>
+        <button class="act-btn" onclick="editItem(${realIdx})">✏️</button>
+        <button class="act-btn del" onclick="deleteItem(${realIdx})">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Aktualizuj filter dropdown
+  const typy = [...new Set(items.map(it => it.typ))].sort();
+  const sel = document.getElementById('f-typ');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— všetky —</option>' +
+    typy.map(t => `<option value="${t}"${t===cur?' selected':''}>${t}</option>`).join('');
+}
+
+function typClass(typ) {
+  const t = (typ||'').toLowerCase();
+  if (t.includes('pipe'))    return 'pipe';
+  if (t.includes('elbow'))   return 'elbow';
+  if (t.includes('reducer')) return 'reducer';
+  if (t.includes('flange'))  return 'flange';
+  if (t.includes('t-piece') || t.includes('tee')) return 'tee';
+  if (t.includes('cap'))     return 'cap';
+  return 'other';
+}
+
+function shortType(typ) {
+  const t = (typ||'').toLowerCase();
+  if (t.includes('pipe'))    return 'PIPE';
+  if (t.includes('elbow'))   return 'ELBOW';
+  if (t.includes('reducer')) return 'REDUCER';
+  if (t.startsWith('weld'))  return 'FLANGE WN';
+  if (t.startsWith('blank')) return 'FLANGE BL';
+  if (t.includes('flange'))  return 'FLANGE';
+  if (t.includes('t-piece')) return 'T-PIECE';
+  if (t.includes('cap'))     return 'CAP';
+  return typ.split(' ')[0].toUpperCase();
+}
+
+// ─── IMPORT DOCX ──────────────────────────────
+function importDocx(e) {
+  const file = e.target.files[0]; if (!file) return;
+  setStatus('Čítam ' + file.name + ' ...', 'info');
+  file.arrayBuffer().then(buf => {
+    mammoth.convertToHtml({ arrayBuffer: buf }).then(res => {
+      const parsed = parseHtml(res.value, file.name);
+      if (!parsed.length) {
+        setStatus('Nenašiel som žiadne položky v tabuľke.', 'err');
+        return;
+      }
+      previewItems = parsed;
+      showPreview(parsed, file.name);
+    }).catch(err => setStatus('Chyba mammoth: ' + err.message, 'err'));
+  }).catch(err => setStatus('Chyba čítania: ' + err.message, 'err'));
+  e.target.value = '';
+}
+
+function parseHtml(html, filename) {
+  const dom = new DOMParser().parseFromString(html, 'text/html');
+  const result = [];
+
+  // Číslo DL z HTML textu
+  const dlMatch = html.match(/DL\s*\d{4}\/[\d]+\/[\d]+/);
+  const dlCislo = dlMatch ? dlMatch[0].replace(/\s/g,'') : filename.replace(/\.[^.]+$/,'');
+
+  for (const tbl of dom.querySelectorAll('table')) {
+    const rows = [...tbl.querySelectorAll('tr')];
+    let started = false;
+
+    for (const row of rows) {
+      const cells = [...row.querySelectorAll('td,th')].map(c => c.textContent.trim());
+      if (!cells.length) continue;
+
+      // Header riadok
+      if (!started) {
+        if (cells.some(c => c.toLowerCase().includes('description'))) {
+          started = true;
+        }
+        continue;
+      }
+
+      const desc   = cells[0] || '';
+      const rozmer = cells[1] || '';
+      const norma  = cells[2] || '';
+      if (!desc || !rozmer) continue;
+
+      // Qty a tavba — hľadaj v bunkách 3+
+      let qty = 0, tavba = '';
+      for (let i = 3; i < cells.length; i++) {
+        const raw = cells[i];
+        if (!raw) continue;
+        const cleaned = raw.replace(/[✓√\s]/g, '');
+        if (!cleaned) continue;
+
+        // Číslo = qty
+        const num = cleaned.replace(',', '.').match(/^(\d+\.?\d*)/);
+        if (num && qty === 0) {
+          qty = parseFloat(num[1]) || 0;
+          continue;
+        }
+        // Tavba = alfanumerický reťazec 4+ znakov bez špeciálnych
+        if (!tavba && /^[A-Z0-9]{4,}$/i.test(cleaned)) {
+          tavba = cleaned;
+        }
+      }
+
+      if (qty === 0) continue;
+
+      const isPipe = desc.toLowerCase().includes('pipe');
+      const matMatch = norma.match(/^([A-Z]\d+[A-Z]*)/);
+      const material = matMatch ? matMatch[1] : (norma.split(',')[0] || '').trim();
+
+      result.push({
+        typ:      desc,
+        rozmer:   rozmer,
+        material: material,
+        norma:    norma,
+        jednotka: isPipe ? 'm' : 'ks',
+        zostatok: qty,
+        tavba:    tavba,
+        zdroj_dl: dlCislo,
+        datum:    new Date().toISOString().split('T')[0],
+      });
+    }
+  }
+  return result;
+}
+
+function showPreview(parsed, filename) {
+  document.getElementById('preview-title').textContent =
+    `Náhľad: ${filename} — nájdených ${parsed.length} položiek`;
+
+  const tbl = document.getElementById('preview-table');
+  tbl.innerHTML = `
+    <thead><tr>
+      <th><input type="checkbox" checked onchange="
+        document.querySelectorAll('.p-chk').forEach(c=>c.checked=this.checked)
+      "></th>
+      <th>Typ</th><th>Rozmer</th><th>Materiál</th><th>Norma</th>
+      <th>Množstvo</th><th>Jed.</th><th>Tavba</th>
+    </tr></thead>
+    <tbody>${parsed.map((it,i) => `
+      <tr>
+        <td><input class="p-chk" type="checkbox" data-i="${i}" checked></td>
+        <td style="font-size:11px">${it.typ}</td>
+        <td style="font-family:monospace">${it.rozmer}</td>
+        <td style="font-family:monospace">${it.material}</td>
+        <td style="font-size:11px">${it.norma}</td>
+        <td style="text-align:center;font-weight:700">${it.zostatok}</td>
+        <td style="text-align:center">${it.jednotka}</td>
+        <td style="font-family:monospace;font-size:11px">${it.tavba||'—'}</td>
+      </tr>`).join('')}
+    </tbody>`;
+
+  document.getElementById('preview-wrap').style.display = 'block';
+  setStatus(`Pripravených na import: ${parsed.length} položiek. Skontrolujte a potvrďte.`, 'info');
+}
+
+function cancelPreview() {
+  document.getElementById('preview-wrap').style.display = 'none';
+  previewItems = [];
+  setStatus('Import zrušený.', '');
+}
+
+function confirmImport() {
+  const selected = [...document.querySelectorAll('.p-chk:checked')].map(c => parseInt(c.dataset.i));
+  if (!selected.length) { alert('Žiadne položky vybrané.'); return; }
+  const merge = document.getElementById('merge-chk').checked;
+  let imported = 0, merged = 0;
+
+  selected.forEach(idx => {
+    const it = previewItems[idx];
+    if (merge) {
+      const ex = items.findIndex(m =>
+        m.typ === it.typ && m.rozmer === it.rozmer &&
+        m.norma === it.norma && m.tavba === it.tavba
+      );
+      if (ex >= 0) {
+        items[ex].zostatok = (parseFloat(items[ex].zostatok)||0) + (parseFloat(it.zostatok)||0);
+        items[ex].zdroj_dl = it.zdroj_dl;
+        items[ex].datum    = it.datum;
+        merged++;
+        return;
+      }
+    }
+    items.push({...it});
+    imported++;
+  });
+
+  save();
+  render();
+  document.getElementById('preview-wrap').style.display = 'none';
+  previewItems = [];
+  setStatus(`✓ Importovaných: ${imported} nových, ${merged} zlúčených.`, 'ok');
+}
+
+// ─── CRUD ─────────────────────────────────────
+function deleteItem(idx) {
+  if (!confirm('Vymazať túto položku?')) return;
+  items.splice(idx, 1);
+  save(); render();
+}
+
+function openAddModal() {
+  editIdx = null;
+  document.getElementById('modal-title').textContent = 'Pridať materiál';
+  ['m-typ','m-rozmer','m-material','m-norma','m-zostatok','m-tavba','m-dl'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('m-jednotka').value = 'ks';
+  document.getElementById('modal').style.display = 'flex';
+}
+
+function editItem(idx) {
+  editIdx = idx;
+  const it = items[idx];
+  document.getElementById('modal-title').textContent = 'Upraviť materiál';
+  document.getElementById('m-typ').value      = it.typ||'';
+  document.getElementById('m-rozmer').value   = it.rozmer||'';
+  document.getElementById('m-material').value = it.material||'';
+  document.getElementById('m-norma').value    = it.norma||'';
+  document.getElementById('m-zostatok').value = it.zostatok||'';
+  document.getElementById('m-jednotka').value = it.jednotka||'ks';
+  document.getElementById('m-tavba').value    = it.tavba||'';
+  document.getElementById('m-dl').value       = it.zdroj_dl||'';
+  document.getElementById('modal').style.display = 'flex';
+}
+
+function closeModal() {
+  document.getElementById('modal').style.display = 'none';
+  editIdx = null;
+}
+
+function saveModal() {
+  const typ    = document.getElementById('m-typ').value.trim();
+  const rozmer = document.getElementById('m-rozmer').value.trim();
+  if (!typ || !rozmer) { alert('Vyplňte Typ a Rozmer.'); return; }
+  const data = {
+    typ, rozmer,
+    material: document.getElementById('m-material').value.trim(),
+    norma:    document.getElementById('m-norma').value.trim(),
+    zostatok: parseFloat(document.getElementById('m-zostatok').value) || 0,
+    jednotka: document.getElementById('m-jednotka').value,
+    tavba:    document.getElementById('m-tavba').value.trim(),
+    zdroj_dl: document.getElementById('m-dl').value.trim(),
+    datum:    new Date().toISOString().split('T')[0],
+  };
+  if (editIdx !== null) items[editIdx] = data;
+  else items.push(data);
+  save(); render(); closeModal();
+}
+
+// ─── UTILS ────────────────────────────────────
+function clearFilters() {
+  ['f-rozmer','f-mat'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('f-typ').value = '';
+  render();
+}
+
+function clearAll() {
+  if (!confirm(`Vymazať všetkých ${items.length} položiek?`)) return;
+  items = []; save(); render();
+  setStatus('Sklad vymazaný.', '');
+}
+
+function exportCSV() {
+  if (!items.length) { alert('Sklad je prázdny.'); return; }
+  const head = ['Typ','Rozmer','Materiál','Norma','Zostatok','Jednotka','Tavba','Dodací list','Dátum'];
+  const rows = items.map(it => [
+    it.typ, it.rozmer, it.material, it.norma,
+    it.zostatok, it.jednotka, it.tavba, it.zdroj_dl, it.datum
+  ].map(v => `"${(v||'').toString().replace(/"/g,'""')}"`).join(','));
+  const csv = [head.join(','), ...rows].join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent('\uFEFF' + csv);
+  a.download = 'sklad_' + new Date().toISOString().split('T')[0] + '.csv';
+  a.click();
+}
+
+function setStatus(msg, type) {
+  const el = document.getElementById('status-text');
+  el.textContent = msg;
+  el.className = type === 'ok' ? 'status-ok' : type === 'err' ? 'status-err' : type === 'info' ? 'status-info' : '';
+}
+
+// Zavrieť modal kliknutím mimo
+document.getElementById('modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// Init
+render();
+</script>
+</body>
+</html>
