@@ -129,7 +129,7 @@ table.main td.center { text-align: center; }
   <!-- Import docx -->
   <div class="file-wrap">
     <button class="btn btn-blue">📂 Nahrať dodací list (.docx)</button>
-    <input type="file" accept=".docx" onchange="importDocx(event)">
+    <input type="file" accept=".docx" multiple onchange="importDocx(event)">
   </div>
   <button class="btn btn-gray" onclick="openAddModal()">+ Pridať ručne</button>
   <button class="btn btn-gray" onclick="exportCSV()">⬇ Export CSV</button>
@@ -334,19 +334,41 @@ function shortType(typ) {
 
 // ─── IMPORT DOCX ──────────────────────────────
 function importDocx(e) {
-  const file = e.target.files[0]; if (!file) return;
-  setStatus('Čítam ' + file.name + ' ...', 'info');
-  file.arrayBuffer().then(buf => {
-    mammoth.convertToHtml({ arrayBuffer: buf }).then(res => {
-      const parsed = parseHtml(res.value, file.name);
-      if (!parsed.length) {
-        setStatus('Nenašiel som žiadne položky v tabuľke.', 'err');
-        return;
-      }
-      previewItems = parsed;
-      showPreview(parsed, file.name);
-    }).catch(err => setStatus('Chyba mammoth: ' + err.message, 'err'));
-  }).catch(err => setStatus('Chyba čítania: ' + err.message, 'err'));
+  const files = [...e.target.files];
+  if (!files.length) return;
+  if (files.length === 1) {
+    // Jeden súbor — ukáž preview ako doteraz
+    const file = files[0];
+    setStatus('Čítam ' + file.name + ' ...', 'info');
+    file.arrayBuffer().then(buf => {
+      mammoth.convertToHtml({ arrayBuffer: buf }).then(res => {
+        const parsed = parseHtml(res.value, file.name);
+        if (!parsed.length) { setStatus('Nenašiel som žiadne položky.', 'err'); return; }
+        previewItems = parsed;
+        showPreview(parsed, file.name);
+      }).catch(err => setStatus('Chyba: ' + err.message, 'err'));
+    });
+  } else {
+    // Viac súborov — importuj všetky automaticky bez preview
+    setStatus('Čítam ' + files.length + ' súborov...', 'info');
+    let allItems = [];
+    let done = 0;
+    files.forEach(file => {
+      file.arrayBuffer().then(buf => {
+        mammoth.convertToHtml({ arrayBuffer: buf }).then(res => {
+          const parsed = parseHtml(res.value, file.name);
+          allItems = allItems.concat(parsed);
+          done++;
+          setStatus('Spracovaných ' + done + ' / ' + files.length + ' súborov...', 'info');
+          if (done === files.length) {
+            // Všetky spracované — ukáž preview
+            previewItems = allItems;
+            showPreview(allItems, files.length + ' súborov (' + allItems.length + ' položiek celkom)');
+          }
+        });
+      });
+    });
+  }
   e.target.value = '';
 }
 
