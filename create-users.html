@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<title>Vytvorenie používateľov — Warehouse Manager</title>
+<script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-app-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-auth-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-database-compat.min.js"></script>
+<style>
+body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background: #f0f2f5; }
+.box { background: #fff; border-radius: 10px; padding: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+h2 { color: #1a1a2e; margin-bottom: 20px; }
+button { padding: 12px 24px; background: #4f7cff; color: #fff; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: 700; }
+button:disabled { background: #aaa; }
+#log { margin-top: 20px; background: #1a1a2e; color: #e0e8ff; border-radius: 6px; padding: 16px; font-family: monospace; font-size: 13px; min-height: 100px; max-height: 400px; overflow-y: auto; }
+.ok { color: #27ae60; }
+.err { color: #e74c3c; }
+.info { color: #f59e0b; }
+.step { color: #4f7cff; font-weight: 700; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="box">
+  <h2>🔧 Vytvorenie používateľov</h2>
+  <p style="color:#666;font-size:13px;margin-bottom:20px">
+    Tento súbor vytvorí Firebase Auth účty pre Warehouse Manager.<br>
+    <strong>Spustite raz, potom môžete súbor zmazať.</strong>
+  </p>
+  <button id="btn" onclick="run()">▶ Vytvoriť používateľov</button>
+  <div id="log">Stlačte tlačidlo…</div>
+</div>
+
+<script>
+const USERS = [
+  {
+    name: "Martin Kolcar",
+    email: "martinkolcar@iso.sk",
+    password: "iso1985",
+    role: "admin",
+    projects: []  // admin vidí všetky projekty
+  },
+  {
+    name: "Isabel Szeibecederova",
+    email: "isabelszeibecederova@iso.sk",
+    password: "iso4455",
+    role: "user",
+    projects: []  // admin priradí projekty neskôr
+  }
+];
+
+function log(msg, cls='') {
+  const el = document.getElementById('log');
+  el.innerHTML += `<div class="${cls}">${msg}</div>`;
+  el.scrollTop = 9999;
+}
+
+window.run = async function() {
+  document.getElementById('btn').disabled = true;
+  document.getElementById('log').innerHTML = '';
+  log('Inicializujem Firebase...', 'step');
+
+  try {
+    firebase.initializeApp({
+      apiKey: "AIzaSyD7lqAVEY3-UZAWu-q2o_6YkOkTyyV4tOA",
+      authDomain: "warehouse-montex.firebaseapp.com",
+      databaseURL: "https://warehouse-montex-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "warehouse-montex",
+      storageBucket: "warehouse-montex.firebasestorage.app",
+      messagingSenderId: "1071159413037",
+      appId: "1:1071159413037:web:93ffc2eb346b781c5b2ba4"
+    });
+  } catch(e) {
+    if (!e.message.includes('already exists')) {
+      log('❌ Firebase init error: ' + e.message, 'err');
+      document.getElementById('btn').disabled = false;
+      return;
+    }
+  }
+
+  const auth = firebase.auth();
+  const db   = firebase.database();
+  log('✓ Firebase pripojený', 'ok');
+  log('Vytváram používateľov...', 'step');
+
+  let ok = 0, skipped = 0;
+
+  for (const u of USERS) {
+    try {
+      // Vytvor Auth účet
+      const cred = await auth.createUserWithEmailAndPassword(u.email, u.password);
+      await cred.user.updateProfile({ displayName: u.name });
+
+      // Ulož profil do Realtime DB
+      await db.ref('users/' + cred.user.uid).set({
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        projects: u.projects,
+        created: Date.now()
+      });
+
+      log(`✓ ${u.name} (${u.email}) — ${u.role}`, 'ok');
+      ok++;
+
+      // Odhlásiť sa (aby sme mohli vytvoriť ďalšieho)
+      await auth.signOut();
+
+    } catch(e) {
+      if (e.code === 'auth/email-already-in-use') {
+        log(`⚠ ${u.name} — účet už existuje`, 'info');
+        skipped++;
+      } else {
+        log(`✗ ${u.name}: ${e.message}`, 'err');
+      }
+    }
+  }
+
+  log('', '');
+  log(`✅ Hotovo! Vytvorených: ${ok}, Preskočených: ${skipped}`, 'ok');
+  log('', '');
+  log('Teraz môžete otvoriť warehouse-manager a prihlásiť sa:', 'step');
+  log('  Martin Kolcar: martinkolcar@iso.sk / iso1985', '');
+  log('  Isabel Szeibecederova: isabelszeibecederova@iso.sk / iso4455', '');
+  log('', '');
+  log('⚠ Tento súbor môžete zmazať.', 'info');
+
+  document.getElementById('btn').disabled = false;
+}
+</script>
+</body>
+</html>
