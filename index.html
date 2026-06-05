@@ -846,7 +846,7 @@ render();
     <!-- Body -->
     <div class="vyd-body">
       <!-- Ľavý panel: izometrie -->
-      <div class="vyd-iso-panel">
+      <div class="vyd-iso-panel" id="vyd-iso-panel">
         <div class="vyd-iso-search">
           <input id="vyd-iso-inp" placeholder="🔍 Hľadaj izometriu..." oninput="renderIsoList(this.value)">
           <select id="vyd-sec-sel" onchange="renderIsoList(document.getElementById('vyd-iso-inp').value)">
