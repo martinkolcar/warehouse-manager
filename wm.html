@@ -317,6 +317,8 @@ table.main td.center { text-align: center; }
   <select id="f-rozmer" onchange="render()"><option value="">— všetky —</option></select>
   <label id="lbl-mat">Materiál:</label>
   <select id="f-mat" onchange="render()"><option value="">— všetky —</option></select>
+  <label id="lbl-tavba">Tavba:</label>
+  <input id="f-tavba" placeholder="napr. R61462" oninput="render()" style="width:110px">
   <button id="btn-clear-filter" class="btn btn-gray" onclick="clearFilters()">× Vyčistiť</button>
 </div>
 
@@ -433,11 +435,13 @@ function render() {
   const fTyp    = document.getElementById('f-typ').value;
   const fRozmer = document.getElementById('f-rozmer').value;
   const fMat    = document.getElementById('f-mat').value;
+  const fTavba  = (document.getElementById('f-tavba').value||'').trim().toUpperCase();
 
   const filtered = items.filter(it =>
     (!fTyp    || it.typ === fTyp) &&
     (!fRozmer || it.rozmer === fRozmer) &&
-    (!fMat    || (it.material||'') === fMat)
+    (!fMat    || (it.material||'') === fMat) &&
+    (!fTavba  || (it.tavba||'').toUpperCase().includes(fTavba))
   );
 
   document.getElementById('count-text').textContent =
@@ -787,7 +791,8 @@ function confirmImport() {
     if (merge) {
       const ex = items.findIndex(m =>
         m.typ === it.typ && m.rozmer === it.rozmer &&
-        m.norma === it.norma && m.tavba === it.tavba
+        m.norma === it.norma && m.tavba === it.tavba &&
+        m.zdroj_dl === it.zdroj_dl
       );
       if (ex >= 0) {
         const pred = parseFloat(items[ex].zostatok)||0;
@@ -895,8 +900,10 @@ function saveModal() {
 
 // ─── UTILS ────────────────────────────────────
 function clearFilters() {
-  ['f-rozmer','f-mat'].forEach(id => document.getElementById(id).value='');
   document.getElementById('f-typ').value = '';
+  document.getElementById('f-rozmer').value = '';
+  document.getElementById('f-mat').value = '';
+  document.getElementById('f-tavba').value = '';
   render();
 }
 
@@ -2207,7 +2214,7 @@ const LANGS = {
     subtitle:'Prihlásenie do systému', name:'MENO', pass:'HESLO', login:'Prihlásiť sa', logging:'...', errWrong:'Nesprávne meno alebo heslo', errEmpty:'Zadajte meno a heslo',
     logout:'Odhlásiť sa', switchProj:'Prepnúť projekt', projects:'Projekty', users:'Používatelia', newProj:'+ Nový projekt', projName:'Názov projektu', projDesc:'Popis (voliteľné)', create:'Vytvoriť', close:'Zavrieť', isos:'Izometrie', uploadPdf:'📄 Nahrať PDF izometrie', deleteProj:'Vymazať projekt',
     importBtn:'📂 Nahrať dodací list (.docx)', addManual:'+ Pridať ručne', exportCsv:'⬇ Export CSV', vydajky:'📋 Výdajky', deleteAll:'🗑 Vymazať všetko', migrateBtn:'☁ Preniesť do cloudu',
-    typLabel:'Typ:', rozmerLabel:'Rozmer:', materialLabel:'Materiál:', clearFilter:'× Vyčistiť',
+    typLabel:'Typ:', rozmerLabel:'Rozmer:', materialLabel:'Materiál:', clearFilter:'× Vyčistiť', tavbaLabel:'Tavba:',
     allTypes:'— všetky typy —', allSizes:'— všetky rozmery —', allMats:'— všetky materiály —',
     ready:'Pripravený. Nahrajte dodací list (.docx).', emptyWarehouse:'Sklad je prázdny. Nahrajte dodací list.', noResults:'Žiadne výsledky pre filter.',
     colTyp:'TYP', colRozmer:'ROZMER', colMaterial:'MATERIÁL', colNorma:'NORMA', colZostatok:'ZOSTATOK', colJed:'JED.', colPozn:'POZN.', colTavba:'TAVBA', colDl:'DODACÍ LIST', colDatum:'DÁTUM', colAkcie:'AKCIE',
@@ -2220,7 +2227,7 @@ const LANGS = {
     subtitle:'Sign in to the system', name:'NAME', pass:'PASSWORD', login:'Sign in', logging:'...', errWrong:'Incorrect name or password', errEmpty:'Enter name and password',
     logout:'Sign out', switchProj:'Switch project', projects:'Projects', users:'Users', newProj:'+ New project', projName:'Project name', projDesc:'Description (optional)', create:'Create', close:'Close', isos:'Isometries', uploadPdf:'📄 Upload PDF isometries', deleteProj:'Delete project',
     importBtn:'📂 Upload delivery list (.docx)', addManual:'+ Add manually', exportCsv:'⬇ Export CSV', vydajky:'📋 Issue slips', deleteAll:'🗑 Delete all', migrateBtn:'☁ Migrate to cloud',
-    typLabel:'Type:', rozmerLabel:'Size:', materialLabel:'Material:', clearFilter:'× Clear',
+    typLabel:'Type:', rozmerLabel:'Size:', materialLabel:'Material:', clearFilter:'× Clear', tavbaLabel:'Heat No.:',
     allTypes:'— all types —', allSizes:'— all sizes —', allMats:'— all materials —',
     ready:'Ready. Upload delivery list (.docx).', emptyWarehouse:'Warehouse empty. Upload delivery list.', noResults:'No results for filter.',
     colTyp:'TYPE', colRozmer:'SIZE', colMaterial:'MATERIAL', colNorma:'STANDARD', colZostatok:'STOCK', colJed:'UNIT', colPozn:'NOTE', colTavba:'HEAT NO.', colDl:'DELIVERY LIST', colDatum:'DATE', colAkcie:'ACTIONS',
@@ -2233,7 +2240,7 @@ const LANGS = {
     subtitle:'Anmeldung am System', name:'NAME', pass:'PASSWORT', login:'Anmelden', logging:'...', errWrong:'Falscher Name oder Passwort', errEmpty:'Name und Passwort eingeben',
     logout:'Abmelden', switchProj:'Projekt wechseln', projects:'Projekte', users:'Benutzer', newProj:'+ Neues Projekt', projName:'Projektname', projDesc:'Beschreibung (optional)', create:'Erstellen', close:'Schließen', isos:'Isometrien', uploadPdf:'📄 PDF hochladen', deleteProj:'Projekt löschen',
     importBtn:'📂 Lieferschein laden (.docx)', addManual:'+ Manuell hinzufügen', exportCsv:'⬇ CSV exportieren', vydajky:'📋 Ausgabescheine', deleteAll:'🗑 Alles löschen', migrateBtn:'☁ In Cloud übertragen',
-    typLabel:'Typ:', rozmerLabel:'Größe:', materialLabel:'Material:', clearFilter:'× Löschen',
+    typLabel:'Typ:', rozmerLabel:'Größe:', materialLabel:'Material:', clearFilter:'× Löschen', tavbaLabel:'Schmelze:',
     allTypes:'— alle Typen —', allSizes:'— alle Größen —', allMats:'— alle Materialien —',
     ready:'Bereit. Lieferschein hochladen.', emptyWarehouse:'Lager leer. Lieferschein hochladen.', noResults:'Keine Ergebnisse.',
     colTyp:'TYP', colRozmer:'GRÖßE', colMaterial:'MATERIAL', colNorma:'NORM', colZostatok:'BESTAND', colJed:'EINH.', colPozn:'NOTIZ', colTavba:'SCHMELZE', colDl:'LIEFERSCHEIN', colDatum:'DATUM', colAkcie:'AKTIONEN',
@@ -2246,7 +2253,7 @@ const LANGS = {
     subtitle:'Вхід до системи', name:'ІМЯ', pass:'ПАРОЛЬ', login:'Увійти', logging:'...', errWrong:'Невірне імя або пароль', errEmpty:'Введіть імя та пароль',
     logout:'Вийти', switchProj:'Змінити проект', projects:'Проекти', users:'Користувачі', newProj:'+ Новий проект', projName:'Назва проекту', projDesc:'Опис', create:'Створити', close:'Закрити', isos:'Ізометрії', uploadPdf:'📄 PDF ізометрії', deleteProj:'Видалити проект',
     importBtn:'📂 Завантажити накладну (.docx)', addManual:'+ Додати вручну', exportCsv:'⬇ Експорт CSV', vydajky:'📋 Видаткові', deleteAll:'🗑 Видалити все', migrateBtn:'☁ Перенести в хмару',
-    typLabel:'Тип:', rozmerLabel:'Розмір:', materialLabel:'Матеріал:', clearFilter:'× Очистити',
+    typLabel:'Тип:', rozmerLabel:'Розмір:', materialLabel:'Матеріал:', clearFilter:'× Очистити', tavbaLabel:'Плавка:',
     allTypes:'— всі типи —', allSizes:'— всі розміри —', allMats:'— всі матеріали —',
     ready:'Готово. Завантажте накладну.', emptyWarehouse:'Склад порожній. Завантажте накладну.', noResults:'Немає результатів.',
     colTyp:'ТИП', colRozmer:'РОЗМІР', colMaterial:'МАТЕРІАЛ', colNorma:'НОРМА', colZostatok:'ЗАЛИШОК', colJed:'ОД.', colPozn:'ПРИМ.', colTavba:'ПЛАВКА', colDl:'НАКЛАДНА', colDatum:'ДАТА', colAkcie:'ДІЇ',
@@ -2291,6 +2298,7 @@ function applyLang() {
   el=document.getElementById('lbl-typ');    if(el) el.textContent=t('typLabel');
   el=document.getElementById('lbl-rozmer'); if(el) el.textContent=t('rozmerLabel');
   el=document.getElementById('lbl-mat');    if(el) el.textContent=t('materialLabel');
+  el=document.getElementById('lbl-tavba');  if(el) el.textContent=t('tavbaLabel');
   el=document.getElementById('btn-clear-filter'); if(el) el.textContent=t('clearFilter');
   // Select options — prvá option (všetky)
   var ftyp=document.getElementById('f-typ');
@@ -2755,11 +2763,44 @@ function renderAdminUsers() {
     var projs = snaps[1].val() || {};
     var projList = Object.entries(projs).map(function(e){ return {id:e[0],name:e[1].name}; });
 
-    var html = '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
-      '<thead><tr style="background:#f0f2f5"><th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#666">Meno</th>' +
-      '<th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#666">Email</th>' +
-      '<th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#666">Rola</th>' +
-      '<th style="padding:8px 10px;font-size:11px;text-transform:uppercase;color:#666">Projekty</th></tr></thead><tbody>';
+    var html =
+      // Hlavička + tlačidlá
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">' +
+        '<span style="font-weight:700;font-size:14px">Používatelia (' + Object.keys(users).length + ')</span>' +
+        '<div style="display:flex;gap:8px">' +
+          '<a href="https://console.firebase.google.com/project/warehouse-montex/authentication/users" target="_blank" ' +
+            'style="padding:6px 12px;border:1px solid #4f7cff;color:#4f7cff;border-radius:5px;font-size:12px;text-decoration:none;display:flex;align-items:center;gap:4px">' +
+            '🔗 Firebase Auth konzola</a>' +
+          '<button onclick="showNewUserForm()" style="padding:6px 14px;background:#4f7cff;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px">+ Nový používateľ</button>' +
+        '</div>' +
+      '</div>' +
+
+      // Formulár nového používateľa (skrytý)
+      '<div id="new-user-form" style="display:none;background:#f7f8fa;border-radius:8px;padding:14px;margin-bottom:16px;border:1px solid #e4e8ef">' +
+        '<div style="font-weight:600;font-size:13px;margin-bottom:10px">Nový používateľ</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+          '<input id="nu-name" placeholder="Meno a priezvisko" style="flex:1;min-width:160px;padding:8px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">' +
+          '<input id="nu-email" placeholder="Email (napr. jan@firma.sk)" type="email" style="flex:1;min-width:180px;padding:8px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">' +
+          '<input id="nu-pass" placeholder="Heslo (min. 6 znakov)" type="password" style="flex:1;min-width:150px;padding:8px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">' +
+          '<select id="nu-role" style="padding:8px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">' +
+            '<option value="user">Používateľ</option>' +
+            '<option value="admin">Admin</option>' +
+          '</select>' +
+          '<button onclick="createNewUser()" style="padding:8px 16px;background:#27ae60;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;font-weight:700">Vytvoriť</button>' +
+          '<button onclick="document.getElementById(\'new-user-form\').style.display=\'none\'" style="padding:8px 12px;background:none;border:1px solid #ccc;border-radius:5px;cursor:pointer;font-size:13px">Zrušiť</button>' +
+        '</div>' +
+        '<div id="nu-err" style="display:none;margin-top:8px;padding:8px 12px;background:rgba(231,76,60,0.1);border-radius:5px;color:#e74c3c;font-size:12px"></div>' +
+      '</div>' +
+
+      // Tabuľka používateľov
+      '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+      '<thead><tr style="background:#f0f2f5">' +
+        '<th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#666">Meno</th>' +
+        '<th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#666">Email</th>' +
+        '<th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#666">Rola</th>' +
+        '<th style="padding:8px 10px;font-size:11px;text-transform:uppercase;color:#666">Projekty</th>' +
+        '<th style="padding:8px 10px;border-bottom:none"></th>' +
+      '</tr></thead><tbody>';
 
     Object.entries(users).forEach(function(entry) {
       var uid = entry[0]; var u = entry[1];
@@ -2770,14 +2811,68 @@ function renderAdminUsers() {
           p.name + '</label>';
       }).join('');
       html += '<tr style="border-bottom:1px solid #eee">' +
-        '<td style="padding:10px">' + (u.name||'—') + '</td>' +
+        '<td style="padding:10px;font-weight:600">' + (u.name||'—') + '</td>' +
         '<td style="padding:10px;font-size:12px;color:#666">' + (u.email||'—') + '</td>' +
         '<td style="padding:10px"><span style="font-size:11px;padding:2px 8px;border-radius:3px;background:' + (u.role==='admin'?'#dbeafe':'#f0f2f5') + ';color:' + (u.role==='admin'?'#1d4ed8':'#666') + '">' + (u.role||'user') + '</span></td>' +
         '<td style="padding:10px"><div style="display:flex;flex-direction:column;gap:4px">' + projCheckboxes + '</div></td>' +
+        '<td style="padding:10px;text-align:right"><button onclick="deleteUser(\''+uid+'\',\''+( u.name||'').replace(/'/g,'')+'\' )" style="background:none;border:1px solid #e74c3c;color:#e74c3c;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px">🗑</button></td>' +
         '</tr>';
     });
     html += '</tbody></table>';
     body.innerHTML = html;
+  });
+}
+
+function showNewUserForm() {
+  var f = document.getElementById('new-user-form');
+  if (f) { f.style.display = f.style.display==='none'?'block':'none'; }
+}
+
+function createNewUser() {
+  var name  = (document.getElementById('nu-name').value||'').trim();
+  var email = (document.getElementById('nu-email').value||'').trim().toLowerCase();
+  var pass  = (document.getElementById('nu-pass').value||'').trim();
+  var role  = document.getElementById('nu-role').value;
+  var err   = document.getElementById('nu-err');
+  err.style.display = 'none';
+
+  if (!name || !email || !pass) { err.textContent='Vyplňte všetky polia.'; err.style.display='block'; return; }
+  if (pass.length < 6) { err.textContent='Heslo musí mať aspoň 6 znakov.'; err.style.display='block'; return; }
+
+  // Vytvor cez Firebase Admin REST API (cez signUp)
+  var apiKey = 'AIzaSyD7lqAVEY3-UZAWu-q2o_6YkOkTyyV4tOA';
+  fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + apiKey, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ email: email, password: pass, returnSecureToken: true })
+  }).then(function(r){ return r.json(); }).then(function(data) {
+    if (data.error) {
+      var msg = data.error.message;
+      if (msg === 'EMAIL_EXISTS') msg = 'Tento email už existuje.';
+      err.textContent = msg; err.style.display = 'block';
+      return;
+    }
+    // Ulož profil do DB
+    return window.db.ref('users/' + data.localId).set({
+      name: name, email: email, role: role, projects: [], created: Date.now()
+    });
+  }).then(function() {
+    document.getElementById('new-user-form').style.display = 'none';
+    document.getElementById('nu-name').value = '';
+    document.getElementById('nu-email').value = '';
+    document.getElementById('nu-pass').value = '';
+    renderAdminUsers();
+    setStatus('✓ Používateľ ' + name + ' vytvorený.', 'ok');
+  }).catch(function(e) {
+    err.textContent = e.message; err.style.display = 'block';
+  });
+}
+
+function deleteUser(uid, name) {
+  if (!confirm('Vymazať používateľa ' + name + ' z databázy?\n(Auth účet zostane — vymažte ho manuálne vo Firebase konzole)')) return;
+  window.db.ref('users/' + uid).remove().then(function() {
+    renderAdminUsers();
+    setStatus('Používateľ ' + name + ' vymazaný z DB.', 'ok');
   });
 }
 
