@@ -839,9 +839,9 @@ render();
       <span id="vyd-number" style="font-family:monospace;font-size:12px;color:#9a9bb0"></span>
       <div style="flex:1"></div>
       <button class="btn" style="background:#6b7280;color:#fff;padding:6px 14px" onclick="openVydNahlad()">👁 Náhľad</button>
-      <button class="btn" style="background:#27ae60;color:#fff;padding:6px 14px;margin-left:6px" onclick="saveVydajka('pdf')">📄 Uložiť + PDF</button>
-      <button class="btn" style="background:#4f7cff;color:#fff;padding:6px 14px;margin-left:6px" onclick="saveVydajka('save')">💾 Uložiť</button>
-      <button class="btn btn-gray" style="margin-left:6px;padding:6px 14px" onclick="closeVydajka()">✕ Zavrieť</button>
+      <button class="btn" style="background:#27ae60;color:#fff;padding:6px 14px;margin-left:6px" onclick="saveVydajka('pdf')">📄 Uložiť celú výdajku + PDF</button>
+      <button class="btn" style="background:#4f7cff;color:#fff;padding:6px 14px;margin-left:6px" onclick="saveVydajka('save')">💾 Uložiť celú výdajku</button>
+      <button class="btn" style="background:#374151;color:#fff;margin-left:14px;padding:6px 14px" onclick="closeVydajka()">✕ Zavrieť</button>
     </div>
     <!-- Body -->
     <div class="vyd-body">
@@ -868,6 +868,7 @@ render();
         <!-- ISO header -->
         <div class="vyd-iso-header">
           <span class="vyd-iso-title empty" id="vyd-iso-title">← Vyberte izometriu zo zoznamu</span>
+          <button id="vyd-zmenit-btn" style="display:none;background:#374151;color:#fff;border:none;padding:5px 13px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600" onclick="zmenitTrasu()">↩ Zmeniť trasu</button>
         </div>
         <!-- Filtre materiálov -->
         <div class="vyd-mat-filters" id="vyd-mat-filters" style="display:none">
@@ -904,12 +905,11 @@ render();
               <tbody id="vyd-lines-tbody"></tbody>
             </table>
           </div>
-          <div class="vyd-footer">
-            <span style="font-size:12px;color:#666">Celkom položiek: <strong id="vyd-total-count">0</strong></span>
+          <div class="vyd-footer" style="background:#f0f4ff;border-top:1px solid #c8d8f0;padding:8px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0">
+            <span style="font-size:12px;color:#666">✅ Pridané položky: <strong id="vyd-total-count" style="color:#1a5fa8;font-size:14px">0</strong></span>
+            <span style="font-size:11px;color:#999">— na uloženie použite tlačidlá hore v headerи</span>
             <div style="flex:1"></div>
-            <button class="btn" style="background:#6b7280;color:#fff;padding:7px 16px" onclick="openVydNahlad()">👁 Náhľad</button>
-            <button class="btn" style="background:#27ae60;color:#fff;padding:7px 16px" onclick="saveVydajka('pdf')">📄 Uložiť + PDF</button>
-            <button class="btn btn-gray" style="padding:7px 16px" onclick="saveVydajka('save')">💾 Uložiť</button>
+            <button onclick="clearVydLines()" style="background:none;border:1px solid #ccc;color:#888;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:11px">🗑 Vymazať všetko</button>
           </div>
         </div>
       </div>
@@ -938,11 +938,23 @@ function openVydajkaWindow() {
   document.getElementById('vyd-number').textContent = n;
   vydLines = [];
   vydIso = null;
-  document.getElementById('vyd-iso-title').textContent = '← Vyberte izometriu zo zoznamu';
-  document.getElementById('vyd-iso-title').className = 'vyd-iso-title empty';
+  vydIsoSec = null;
+
+  // Reset bočný panel
+  const panel = document.getElementById('vyd-iso-panel');
+  panel.style.display = 'flex';
+  panel.style.flexDirection = 'column';
+
+  // Reset titulok
+  const titleEl = document.getElementById('vyd-iso-title');
+  titleEl.textContent = '← Vyberte izometriu zo zoznamu';
+  titleEl.className = 'vyd-iso-title empty';
+  document.getElementById('vyd-zmenit-btn').style.display = 'none';
+
   document.getElementById('vyd-mat-filters').style.display = 'none';
   document.getElementById('vyd-mat-list').innerHTML = '<div style="text-align:center;padding:40px;color:#aaa;font-size:13px">Vyberte izometriu</div>';
   document.getElementById('vyd-lines-panel').style.display = 'none';
+  document.getElementById('vyd-lines-tbody').innerHTML = '';
   document.getElementById('vyd-iso-inp').value = '';
   renderIsoList('');
   document.getElementById('vyd-overlay').classList.add('open');
@@ -1001,8 +1013,16 @@ function renderIsoList(q) {
 function selectVydIso(iso, sec) {
   vydIso = iso;
   vydIsoSec = sec;
-  document.getElementById('vyd-iso-title').textContent = iso;
-  document.getElementById('vyd-iso-title').className = 'vyd-iso-title';
+
+  // Skry bočný panel izometrií — sme na trase
+  document.getElementById('vyd-iso-panel').style.display = 'none';
+
+  // Zobraz názov trasy + tlačidlo zmeniť
+  const titleEl = document.getElementById('vyd-iso-title');
+  titleEl.innerHTML = `<span style="font-size:11px;color:#888;font-family:inherit;font-weight:400;margin-right:6px">Trasa:</span>${iso} <span style="font-size:11px;background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:3px;margin-left:6px;font-family:inherit">${sec}</span>`;
+  titleEl.className = 'vyd-iso-title';
+  document.getElementById('vyd-zmenit-btn').style.display = 'inline-block';
+
   document.getElementById('vyd-mat-filters').style.display = 'flex';
 
   // Aktualizuj filter dropdown pre typy
@@ -1014,7 +1034,40 @@ function selectVydIso(iso, sec) {
   document.getElementById('vf-mat').value = '';
 
   renderVydMatList();
-  renderIsoList(document.getElementById('vyd-iso-inp').value); // refresh active state
+}
+
+function zmenitTrasu() {
+  if (vydLines.length) {
+    const akcia = confirm(
+      `Výdajka "${document.getElementById('vyd-number').textContent}" obsahuje ${vydLines.length} položiek a nie je uložená.\n\n` +
+      `Stlačte OK → Uložiť výdajku a zmeniť trasu\n` +
+      `Stlačte Zrušiť → Zahodiť a zmeniť trasu`
+    );
+    if (akcia) {
+      // Uloží výdajku bez zatvorenia okna
+      saveVydajka('save');
+    } else {
+      // Zahodí riadky
+      vydLines = [];
+      document.getElementById('vyd-lines-tbody').innerHTML = '';
+      document.getElementById('vyd-lines-panel').style.display = 'none';
+      updateVydCount();
+      document.getElementById('vyd-number').textContent = genVydNumber();
+    }
+  }
+  // Zobraz bočný panel a resetuj
+  vydIso = null;
+  vydIsoSec = null;
+  document.getElementById('vyd-iso-panel').style.display = 'flex';
+  document.getElementById('vyd-iso-panel').style.flexDirection = 'column';
+  const titleEl = document.getElementById('vyd-iso-title');
+  titleEl.textContent = '← Vyberte izometriu zo zoznamu';
+  titleEl.className = 'vyd-iso-title empty';
+  document.getElementById('vyd-zmenit-btn').style.display = 'none';
+  document.getElementById('vyd-mat-filters').style.display = 'none';
+  document.getElementById('vyd-mat-list').innerHTML = '<div style="text-align:center;padding:40px;color:#aaa;font-size:13px">Vyberte izometriu</div>';
+  document.getElementById('vyd-iso-inp').value = '';
+  renderIsoList('');
 }
 
 function clearVydFilters() {
