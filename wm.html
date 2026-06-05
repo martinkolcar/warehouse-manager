@@ -706,40 +706,29 @@ function parseHtml(html, filename) {
       // Norma ostáva celá
       const material = (norma.split(',')[0]||'').trim();
 
-      // ── Multi-tavba split ──────────────────────────────────────
+      // ── Tavba ──────────────────────────────────────────────────
       const tavbaClean = (tavbaRaw||'').replace(/[✓√]/g,'').trim();
 
+      // Ak je viac tavíeb (newline alebo čiarka) a každá má explicitné qty "-Nks"
       if (!isPipe && tavbaClean && (tavbaClean.includes('\n') || tavbaClean.includes(','))) {
-        // Rozdeľ na segmenty — čiarka alebo newline
-        const segs = tavbaClean.split(/[\n\r,]+/).map(s=>s.trim()).filter(Boolean);
-
-        // Formát "tavba-Nks" alebo "tavba-N" kde N = číslo (celkový počet v sklade)
-        // napr. "185003-48KS" = tavba 185003, 48 ks celkovo
-        // napr. "180668-32" = tavba 180668, 32 ks
-        // napr. "-32" = zvyšok predošlej tavby — preskočiť
+        const segs = tavbaClean.split(/[\n\r,]+/).map(s => s.trim()).filter(Boolean);
         const withQty = segs.map(s => {
-          if (!s || s.match(/^[-\s]+$/)) return null; // prázdny alebo len "-"
-          // Skús "tavba-Nks" alebo "tavba-N"
-          const m = s.match(/^([A-Za-z0-9\/\.]+(?:[-\/][A-Za-z0-9]+)*?)[-\s]+(\d+)\s*(?:ks|x|pcs)?$/i);
-          if (m) return { tavba: m[1].trim(), qty: parseFloat(m[2]) };
-          // Bez čísla — táto tavba bez qty
-          const clean = s.replace(/[-\s]+$/, '').trim();
-          return clean ? { tavba: clean, qty: null } : null;
-        }).filter(Boolean);
-
-        if (withQty.length && withQty.every(p => p.qty !== null)) {
-          // Každý segment má svoju qty — použiť priamo
+          const m = s.match(/^(.+?)\s*[-–]\s*(\d+)\s*(?:ks|x|pcs)$/i);
+          return m ? { tavba: m[1].trim(), qty: parseFloat(m[2]) } : null;
+        });
+        if (withQty.every(p => p !== null)) {
+          // Každý segment má explicitnú qty — rozdeliť
           withQty.forEach(p => result.push({typ:desc,rozmer,material,norma,jednotka:'ks',zostatok:p.qty,tavba:p.tavba,poznamka:'',zdroj_dl:dlCislo,datum:today}));
           continue;
         }
-
-        // Niektoré segmenty nemajú qty — rozdeliť celkové qty rovnomerne
-        const validSegs = withQty.filter(p => p.tavba);
-        if (validSegs.length > 0) {
-          const qtyEach = Math.round(qty / validSegs.length * 100) / 100;
-          validSegs.forEach(p => result.push({typ:desc,rozmer,material,norma,jednotka:'ks',zostatok:p.qty||qtyEach,tavba:p.tavba,poznamka:'',zdroj_dl:dlCislo,datum:today}));
-          continue;
-        }
+        // Bez explicitných qty — daj všetky tavby do jedného záznamu, qty z KS stĺpca
+        // Vyčisti každú tavbu od suffixu (-48KS, -32 atď.)
+        const tavbyClean = segs
+          .map(s => s.replace(/\s*[-–]\s*\d+\s*(?:ks|x|pcs)?$/i, '').trim())
+          .filter(t => t && !/^[-–\s\d]+$/.test(t))
+          .join(', ');
+        result.push({typ:desc,rozmer,material,norma,jednotka:'ks',zostatok:qty,tavba:tavbyClean||tavbaClean,poznamka:'',zdroj_dl:dlCislo,datum:today});
+        continue;
       }
 
       result.push({typ:desc,rozmer,material,norma,jednotka:isPipe?'m':'ks',zostatok:qty,tavba:tavbaClean,poznamka:'',zdroj_dl:dlCislo,datum:today});
@@ -962,13 +951,13 @@ document.getElementById('modal').addEventListener('click', function(e) {
   <div class="vyd-panel">
     <!-- Header -->
     <div class="vyd-header">
-      <h2>📋 Výdajka</h2>
+      <h2 id="vyd-title-text">📋 Výdajka</h2>
       <span id="vyd-iso-label" style="font-family:monospace;font-size:13px;color:#9a9bb0;margin-left:8px"></span>
       <div style="flex:1"></div>
-      <button class="btn" style="background:#6b7280;color:#fff;padding:6px 14px" onclick="openVydNahlad()">👁 Náhľad</button>
-      <button class="btn" style="background:#27ae60;color:#fff;padding:6px 14px;margin-left:6px" onclick="saveVydajka('pdf')">📄 Uložiť + PDF</button>
-      <button class="btn" style="background:#4f7cff;color:#fff;padding:6px 14px;margin-left:6px" onclick="saveVydajka('save')">💾 Uložiť</button>
-      <button class="btn" style="background:#374151;color:#fff;margin-left:14px;padding:6px 14px" onclick="closeVydajka()">✕ Zavrieť</button>
+      <button id="vyd-btn-nahlad" class="btn" style="background:#6b7280;color:#fff;padding:6px 14px" onclick="openVydNahlad()">👁 Náhľad</button>
+      <button id="vyd-btn-pdf" class="btn" style="background:#27ae60;color:#fff;padding:6px 14px;margin-left:6px" onclick="saveVydajka('pdf')">📄 Uložiť + PDF</button>
+      <button id="vyd-btn-uloz" class="btn" style="background:#4f7cff;color:#fff;padding:6px 14px;margin-left:6px" onclick="saveVydajka('save')">💾 Uložiť</button>
+      <button id="vyd-btn-zavr" class="btn" style="background:#374151;color:#fff;margin-left:14px;padding:6px 14px" onclick="closeVydajka()">✕ Zavrieť</button>
     </div>
     <!-- Body -->
     <div class="vyd-body">
@@ -1025,8 +1014,8 @@ document.getElementById('modal').addEventListener('click', function(e) {
           <div class="vyd-lines-scroll">
             <table class="vyd-lines-table">
               <thead><tr>
-                <th>Typ</th><th>Rozmer</th><th>Materiál</th><th>Tavba</th>
-                <th>Qty izom.</th><th>Vydané</th><th>Jed.</th>
+                <th id="vyd-th-typ">Typ</th><th id="vyd-th-rozmer">Rozmer</th><th id="vyd-th-mat">Materiál</th><th id="vyd-th-tavba">Tavba</th>
+                <th id="vyd-th-qty">Qty izom.</th><th id="vyd-th-vydane">Vydané</th><th id="vyd-th-jed">Jed.</th>
                 <th id="vyd-th-dlzka" style="display:none">Dĺžka (mm)</th>
                 <th id="vyd-th-sp" style="display:none">SP č.</th>
                 <th></th>
@@ -2217,40 +2206,52 @@ const LANGS = {
     logout:'Odhlásiť sa', switchProj:'Prepnúť projekt', projects:'Projekty', users:'Používatelia', newProj:'+ Nový projekt', projName:'Názov projektu', projDesc:'Popis (voliteľné)', create:'Vytvoriť', close:'Zavrieť', isos:'Izometrie', uploadPdf:'📄 Nahrať PDF izometrie', deleteProj:'Vymazať projekt',
     importBtn:'📂 Nahrať dodací list (.docx)', addManual:'+ Pridať ručne', exportCsv:'⬇ Export CSV', vydajky:'📋 Výdajky', deleteAll:'🗑 Vymazať všetko', migrateBtn:'☁ Preniesť do cloudu',
     typLabel:'Typ:', rozmerLabel:'Rozmer:', materialLabel:'Materiál:', clearFilter:'× Vyčistiť',
+    allTypes:'— všetky typy —', allSizes:'— všetky rozmery —', allMats:'— všetky materiály —',
     ready:'Pripravený. Nahrajte dodací list (.docx).', emptyWarehouse:'Sklad je prázdny. Nahrajte dodací list.', noResults:'Žiadne výsledky pre filter.',
     colTyp:'TYP', colRozmer:'ROZMER', colMaterial:'MATERIÁL', colNorma:'NORMA', colZostatok:'ZOSTATOK', colJed:'JED.', colPozn:'POZN.', colTavba:'TAVBA', colDl:'DODACÍ LIST', colDatum:'DÁTUM', colAkcie:'AKCIE',
-    novaVydajka:'📋 Nová výdajka',
-    importPreview:'Skontrolujte a potvrďte.', merge:'Zlúčiť s existujúcimi', importBtn2:'✓ Importovať do skladu', cancelBtn:'Zrušiť'
+    novaVydajka:'📋 Nová výdajka', importPreview:'Skontrolujte a potvrďte.', merge:'Zlúčiť s existujúcimi', importBtn2:'✓ Importovať do skladu', cancelBtn:'Zrušiť',
+    searchIso:'Hľadaj izometriu...', allSections:'Všetky sekcie', enterSearch:'Zadajte hľadaný text alebo vyberte sekciu', selectIso:'Vyberte izometriu',
+    vydTitle:'Výdajka', vydNahlad:'👁 Náhľad', vydUlozPdf:'📄 Uložiť + PDF', vydUloz:'💾 Uložiť', vydZavr:'✕ Zavrieť', vydZmenit:'↩ Zmeniť trasu',
+    thQtyIzo:'QTY IZOM.', thVydane:'VYDANÉ', thDlzka:'DĹŽKA (MM)', thSp:'SP Č.'
   },
   en: {
     subtitle:'Sign in to the system', name:'NAME', pass:'PASSWORD', login:'Sign in', logging:'...', errWrong:'Incorrect name or password', errEmpty:'Enter name and password',
     logout:'Sign out', switchProj:'Switch project', projects:'Projects', users:'Users', newProj:'+ New project', projName:'Project name', projDesc:'Description (optional)', create:'Create', close:'Close', isos:'Isometries', uploadPdf:'📄 Upload PDF isometries', deleteProj:'Delete project',
     importBtn:'📂 Upload delivery list (.docx)', addManual:'+ Add manually', exportCsv:'⬇ Export CSV', vydajky:'📋 Issue slips', deleteAll:'🗑 Delete all', migrateBtn:'☁ Migrate to cloud',
     typLabel:'Type:', rozmerLabel:'Size:', materialLabel:'Material:', clearFilter:'× Clear',
-    ready:'Ready. Upload delivery list (.docx).', emptyWarehouse:'Warehouse is empty. Upload delivery list.', noResults:'No results for filter.',
+    allTypes:'— all types —', allSizes:'— all sizes —', allMats:'— all materials —',
+    ready:'Ready. Upload delivery list (.docx).', emptyWarehouse:'Warehouse empty. Upload delivery list.', noResults:'No results for filter.',
     colTyp:'TYPE', colRozmer:'SIZE', colMaterial:'MATERIAL', colNorma:'STANDARD', colZostatok:'STOCK', colJed:'UNIT', colPozn:'NOTE', colTavba:'HEAT NO.', colDl:'DELIVERY LIST', colDatum:'DATE', colAkcie:'ACTIONS',
-    novaVydajka:'📋 New issue slip',
-    importPreview:'Review and confirm.', merge:'Merge with existing', importBtn2:'✓ Import to warehouse', cancelBtn:'Cancel'
+    novaVydajka:'📋 New issue slip', importPreview:'Review and confirm.', merge:'Merge with existing', importBtn2:'✓ Import to warehouse', cancelBtn:'Cancel',
+    searchIso:'Search isometry...', allSections:'All sections', enterSearch:'Enter search text or select section', selectIso:'Select isometry',
+    vydTitle:'Issue Slip', vydNahlad:'👁 Preview', vydUlozPdf:'📄 Save + PDF', vydUloz:'💾 Save', vydZavr:'✕ Close', vydZmenit:'↩ Change route',
+    thQtyIzo:'QTY ISOM.', thVydane:'ISSUED', thDlzka:'LENGTH (MM)', thSp:'SP NO.'
   },
   de: {
     subtitle:'Anmeldung am System', name:'NAME', pass:'PASSWORT', login:'Anmelden', logging:'...', errWrong:'Falscher Name oder Passwort', errEmpty:'Name und Passwort eingeben',
     logout:'Abmelden', switchProj:'Projekt wechseln', projects:'Projekte', users:'Benutzer', newProj:'+ Neues Projekt', projName:'Projektname', projDesc:'Beschreibung (optional)', create:'Erstellen', close:'Schließen', isos:'Isometrien', uploadPdf:'📄 PDF hochladen', deleteProj:'Projekt löschen',
     importBtn:'📂 Lieferschein laden (.docx)', addManual:'+ Manuell hinzufügen', exportCsv:'⬇ CSV exportieren', vydajky:'📋 Ausgabescheine', deleteAll:'🗑 Alles löschen', migrateBtn:'☁ In Cloud übertragen',
     typLabel:'Typ:', rozmerLabel:'Größe:', materialLabel:'Material:', clearFilter:'× Löschen',
-    ready:'Bereit. Lieferschein hochladen (.docx).', emptyWarehouse:'Lager ist leer. Lieferschein hochladen.', noResults:'Keine Ergebnisse für Filter.',
+    allTypes:'— alle Typen —', allSizes:'— alle Größen —', allMats:'— alle Materialien —',
+    ready:'Bereit. Lieferschein hochladen.', emptyWarehouse:'Lager leer. Lieferschein hochladen.', noResults:'Keine Ergebnisse.',
     colTyp:'TYP', colRozmer:'GRÖßE', colMaterial:'MATERIAL', colNorma:'NORM', colZostatok:'BESTAND', colJed:'EINH.', colPozn:'NOTIZ', colTavba:'SCHMELZE', colDl:'LIEFERSCHEIN', colDatum:'DATUM', colAkcie:'AKTIONEN',
-    novaVydajka:'📋 Neuer Ausgabeschein',
-    importPreview:'Überprüfen und bestätigen.', merge:'Mit bestehenden zusammenführen', importBtn2:'✓ In Lager importieren', cancelBtn:'Abbrechen'
+    novaVydajka:'📋 Neuer Ausgabeschein', importPreview:'Überprüfen und bestätigen.', merge:'Mit bestehenden zusammenführen', importBtn2:'✓ Importieren', cancelBtn:'Abbrechen',
+    searchIso:'Isometrie suchen...', allSections:'Alle Sektionen', enterSearch:'Suchtext eingeben oder Sektion wählen', selectIso:'Isometrie wählen',
+    vydTitle:'Ausgabeschein', vydNahlad:'👁 Vorschau', vydUlozPdf:'📄 Speichern + PDF', vydUloz:'💾 Speichern', vydZavr:'✕ Schließen', vydZmenit:'↩ Route ändern',
+    thQtyIzo:'MENGE ISO.', thVydane:'AUSGEGEBEN', thDlzka:'LÄNGE (MM)', thSp:'SP NR.'
   },
   uk: {
     subtitle:'Вхід до системи', name:'ІМЯ', pass:'ПАРОЛЬ', login:'Увійти', logging:'...', errWrong:'Невірне імя або пароль', errEmpty:'Введіть імя та пароль',
     logout:'Вийти', switchProj:'Змінити проект', projects:'Проекти', users:'Користувачі', newProj:'+ Новий проект', projName:'Назва проекту', projDesc:'Опис', create:'Створити', close:'Закрити', isos:'Ізометрії', uploadPdf:'📄 PDF ізометрії', deleteProj:'Видалити проект',
     importBtn:'📂 Завантажити накладну (.docx)', addManual:'+ Додати вручну', exportCsv:'⬇ Експорт CSV', vydajky:'📋 Видаткові', deleteAll:'🗑 Видалити все', migrateBtn:'☁ Перенести в хмару',
     typLabel:'Тип:', rozmerLabel:'Розмір:', materialLabel:'Матеріал:', clearFilter:'× Очистити',
-    ready:'Готово. Завантажте накладну (.docx).', emptyWarehouse:'Склад порожній. Завантажте накладну.', noResults:'Немає результатів для фільтра.',
+    allTypes:'— всі типи —', allSizes:'— всі розміри —', allMats:'— всі матеріали —',
+    ready:'Готово. Завантажте накладну.', emptyWarehouse:'Склад порожній. Завантажте накладну.', noResults:'Немає результатів.',
     colTyp:'ТИП', colRozmer:'РОЗМІР', colMaterial:'МАТЕРІАЛ', colNorma:'НОРМА', colZostatok:'ЗАЛИШОК', colJed:'ОД.', colPozn:'ПРИМ.', colTavba:'ПЛАВКА', colDl:'НАКЛАДНА', colDatum:'ДАТА', colAkcie:'ДІЇ',
-    novaVydajka:'📋 Нова видаткова',
-    importPreview:'Перевірте та підтвердіть.', merge:'Обєднати з існуючими', importBtn2:'✓ Імпортувати на склад', cancelBtn:'Скасувати'
+    novaVydajka:'📋 Нова видаткова', importPreview:'Перевірте та підтвердіть.', merge:'Обєднати з існуючими', importBtn2:'✓ Імпортувати', cancelBtn:'Скасувати',
+    searchIso:'Пошук ізометрії...', allSections:'Всі секції', enterSearch:'Введіть текст або оберіть секцію', selectIso:'Оберіть ізометрію',
+    vydTitle:'Видаткова', vydNahlad:'👁 Перегляд', vydUlozPdf:'📄 Зберегти + PDF', vydUloz:'💾 Зберегти', vydZavr:'✕ Закрити', vydZmenit:'↩ Змінити маршрут',
+    thQtyIzo:'К-ТЬ ІЗО.', thVydane:'ВИДАНО', thDlzka:'ДОВЖИНА (ММ)', thSp:'СП №'
   }
 };
 var _lang = localStorage.getItem('wmLang') || 'sk';
@@ -2274,23 +2275,56 @@ function applyLangLogin(){
 
 function applyLang() {
   applyLangLogin();
-  // Toolbar
   var el;
-  el=document.getElementById('btn-import');    if(el) el.textContent=t('importBtn');
-  el=document.getElementById('btn-add');       if(el) el.textContent=t('addManual');
-  el=document.getElementById('btn-csv');       if(el) el.textContent=t('exportCsv');
-  el=document.getElementById('btn-vydajky');   if(el) el.textContent=t('vydajky');
-  el=document.getElementById('btn-delete-all');if(el) el.textContent=t('deleteAll');
-  el=document.getElementById('migrate-btn');   if(el) el.textContent=t('migrateBtn');
+  // Toolbar
+  el=document.getElementById('btn-import');     if(el) el.childNodes[0] && el.childNodes.length ? el.innerHTML=t('importBtn') : null;
+  el=document.getElementById('btn-import');     if(el) el.textContent=t('importBtn');
+  el=document.getElementById('btn-add');        if(el) el.textContent=t('addManual');
+  el=document.getElementById('btn-csv');        if(el) el.textContent=t('exportCsv');
+  el=document.getElementById('btn-vydajky');    if(el) el.textContent=t('vydajky');
+  el=document.getElementById('btn-delete-all'); if(el) el.textContent=t('deleteAll');
+  el=document.getElementById('migrate-btn');    if(el) el.textContent=t('migrateBtn');
   el=document.getElementById('btn-nova-vydajka'); if(el) el.textContent=t('novaVydajka');
-  // Filtre
+  // Filtre labely
   el=document.getElementById('lbl-typ');    if(el) el.textContent=t('typLabel');
   el=document.getElementById('lbl-rozmer'); if(el) el.textContent=t('rozmerLabel');
   el=document.getElementById('lbl-mat');    if(el) el.textContent=t('materialLabel');
   el=document.getElementById('btn-clear-filter'); if(el) el.textContent=t('clearFilter');
+  // Select options — prvá option (všetky)
+  var ftyp=document.getElementById('f-typ');
+  if(ftyp && ftyp.options[0]) ftyp.options[0].text=t('allTypes');
+  var frozmer=document.getElementById('f-rozmer');
+  if(frozmer && frozmer.options[0]) frozmer.options[0].text=t('allSizes');
+  var fmat=document.getElementById('f-mat');
+  if(fmat && fmat.options[0]) fmat.options[0].text=t('allMats');
   // Hlavička tabuľky
   var cols=['colTyp','colRozmer','colMaterial','colNorma','colZostatok','colJed','colPozn','colTavba','colDl','colDatum','colAkcie'];
   cols.forEach(function(k){ var e=document.getElementById('th-'+k); if(e) e.textContent=t(k); });
+  // Výdajka header
+  el=document.getElementById('vyd-title-text'); if(el) el.textContent=t('vydTitle');
+  el=document.getElementById('vyd-btn-nahlad'); if(el) el.textContent=t('vydNahlad');
+  el=document.getElementById('vyd-btn-pdf');    if(el) el.textContent=t('vydUlozPdf');
+  el=document.getElementById('vyd-btn-uloz');   if(el) el.textContent=t('vydUloz');
+  el=document.getElementById('vyd-btn-zavr');   if(el) el.textContent=t('vydZavr');
+  el=document.getElementById('vyd-zmenit-btn'); if(el) el.textContent=t('vydZmenit');
+  // ISO search placeholder
+  el=document.getElementById('vyd-iso-inp'); if(el) el.placeholder=t('searchIso');
+  // ISO sekcia select
+  var secSel=document.getElementById('vyd-sec-sel');
+  if(secSel && secSel.options[0]) secSel.options[0].text=t('allSections');
+  // Iso empty state
+  el=document.getElementById('vyd-iso-list');
+  if(el && el.innerHTML.includes('Zadajte')) el.innerHTML='<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">'+t('enterSearch')+'</div>';
+  // Výdajka tabuľka hlavičky
+  el=document.getElementById('vyd-th-qty'); if(el) el.textContent=t('thQtyIzo');
+  el=document.getElementById('vyd-th-vydane'); if(el) el.textContent=t('thVydane');
+  el=document.getElementById('vyd-th-dlzka'); if(el) el.textContent=t('thDlzka');
+  el=document.getElementById('vyd-th-sp'); if(el) el.textContent=t('thSp');
+  // Status
+  var st=document.getElementById('status-text');
+  if(st && (st.textContent.includes('Pripravený') || st.textContent.includes('Ready') || st.textContent.includes('Bereit') || st.textContent.includes('Готово'))) {
+    st.textContent=t('ready');
+  }
 }
 
 
