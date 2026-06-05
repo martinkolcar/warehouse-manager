@@ -682,13 +682,19 @@ function parseHtml(html, filename) {
       if (!desc||!rozmer) continue;
 
       // Vyčisti rozmer
-      // "DN 50 x 60.3" → "60.3" (časť za posledným x)
-      // "26.7x2 26,9X2" → "26.7x2"
-      rozmer = rozmer.split(/\s+/)[0].replace(',','.');
-      if (/^DN/i.test(rozmer)) {
-        const dnX = rozmer.match(/[xX]([\d\.]+)/);
-        rozmer = dnX ? dnX[1] : rozmer.replace(/^DN\s*/i,'').trim();
+      let rozmerClean = rozmer.trim();
+      if (/^DN\s+/i.test(rozmerClean)) {
+        // "DN 50 x 60.3" → "60.3"  |  "DN 400 x 406.4" → "406.4"
+        const dnX = rozmerClean.match(/[xX]\s*([\d\.]+)/);
+        rozmerClean = dnX ? dnX[1] : rozmerClean.replace(/^DN\s+/i,'').split(/\s+/)[0];
+      } else if (/^R\s+/i.test(rozmerClean)) {
+        // "R 1/2" → "R1/2"  |  "R 1 1/2" → "R1-1/2"
+        rozmerClean = 'R' + rozmerClean.replace(/^R\s+/i,'').replace(/\s+/g,'-');
+      } else {
+        // "26.7x2 26,9X2" → "26.7x2"
+        rozmerClean = rozmerClean.split(/\s+/)[0].replace(',','.');
       }
+      rozmer = rozmerClean;
 
       // Qty — vyčisti ✓
       const qty = parseFloat((qtyRaw||'').replace(/[✓√\s]/g,'').replace(',','.')) || 0;
