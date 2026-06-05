@@ -1899,7 +1899,7 @@ async function openTavbaScanner() {
   document.getElementById('tavba-results').innerHTML =
     '<div style="color:#aaa;font-size:12px;text-align:center;padding:16px">Nasmerujte kameru na gravírovanú tavbu…</div>';
   document.getElementById('tavba-scan-status').innerHTML =
-    '<span style="background:rgba(0,0,0,0.6);color:#9ab;font-size:12px;padding:4px 14px;border-radius:20px">🔍 Inicializujem…</span>';
+    '<span style="background:rgba(0,0,0,0.6);color:#9ab;font-size:12px;padding:4px 14px;border-radius:20px">🔍 Spúšťam kameru…</span>';
   document.getElementById('tavba-scanner-overlay').style.display = 'flex';
   _tavbaLastResult = '';
 
@@ -1910,15 +1910,10 @@ async function openTavbaScanner() {
     var video = document.getElementById('tavba-video');
     video.srcObject = _tavbaStream;
     await video.play();
-
-    // Init Tesseract worker
     _tavbaRunning = true;
-    if (!_tavbaWorker) {
-      _tavbaWorker = await Tesseract.createWorker('eng');
-    }
     document.getElementById('tavba-scan-status').innerHTML =
       '<span style="background:rgba(0,0,0,0.6);color:#9ab;font-size:12px;padding:4px 14px;border-radius:20px">📷 Skenuje…</span>';
-    _tavbaInterval = setInterval(doTavbaScanFrame, 1200);
+    _tavbaInterval = setInterval(doTavbaScanFrame, 2000);
   } catch(e) {
     document.getElementById('tavba-scan-status').innerHTML =
       '<span style="background:rgba(200,50,50,0.7);color:#fff;font-size:12px;padding:4px 14px;border-radius:20px">❌ ' + e.message + '</span>';
@@ -1938,7 +1933,7 @@ async function doTavbaScanFrame() {
   var canvas = document.getElementById('tavba-canvas');
   if (!video || video.readyState < 2) return;
 
-  // Crop iba skenovacia zóna — stredný pruh (35%-65% výšky, celá šírka)
+  // Crop stredný pruh
   var vw = video.videoWidth, vh = video.videoHeight;
   var cropH = Math.round(vh * 0.30);
   var cropY = Math.round(vh * 0.5 - cropH / 2);
@@ -1947,45 +1942,62 @@ async function doTavbaScanFrame() {
   var ctx = canvas.getContext('2d');
   ctx.drawImage(video, 0, cropY, vw, cropH, 0, 0, vw, cropH);
 
+  // Canvas → base64
+  var base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+
   try {
-    var result = await _tavbaWorker.recognize(canvas);
-    var rawText = (result.data.text || '').toUpperCase().trim();
-    if (!rawText) return;
-
-    // Extrahuj tokeny — len alfanumerické reťazce 4-15 znakov
-    var tokens = [];
-    var found = rawText.match(/[A-Z0-9][A-Z0-9\-\/]{3,14}/g) || [];
-    found.forEach(function(t) {
-      t = t.replace(/^[-\/]+|[-\/]+$/g, '');
-      if (t.length >= 4) tokens.push(t);
+    var response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 100,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: 'image/jpeg', data: base64 }
+            },
+            {
+              type: 'text',
+              text: 'This is a metal pipe fitting with stamped/engraved text. Find ONLY the heat number (tavba/charge number) - it is typically an alphanumeric code like "925870", "2A/925870", "A1404281", "R61462", "S3805" etc. Ignore the standard (EN...), dimensions (like 48.3x2), and material grade (304L, P235GH). Reply with ONLY the heat number, nothing else. If you cannot find it, reply with just: NONE'
+            }
+          ]
+        }]
+      })
     });
-    tokens = [...new Set(tokens)];
 
-    if (!tokens.length) return;
+    var data = await response.json();
+    var text = ((data.content && data.content[0] && data.content[0].text) || '').trim().toUpperCase();
 
-    // Hľadaj token ktorý je v tavbách skladu
-    var matchedTok = null;
-    var matchedItems = [];
-    for (var i = 0; i < tokens.length; i++) {
-      var m = searchTavbaInItems(tokens[i]);
-      if (m.length) { matchedTok = tokens[i]; matchedItems = m; break; }
-    }
+    if (!text || text === 'NONE' || text.length < 3) return;
 
-    if (matchedTok && matchedTok !== _tavbaLastResult) {
-      _tavbaLastResult = matchedTok;
-      document.getElementById('tavba-manual-inp').value = matchedTok;
-      renderTavbaResults(matchedTok, matchedItems);
+    // Vyčisti — vezmi prvý token
+    var tok = text.split(/[\s,\n]/)[0].replace(/[^A-Z0-9\/\-]/g,'');
+    if (!tok || tok.length < 3) return;
+
+    var matches = searchTavbaInItems(tok);
+    if (matches.length && tok !== _tavbaLastResult) {
+      _tavbaLastResult = tok;
+      document.getElementById('tavba-manual-inp').value = tok;
+      renderTavbaResults(tok, matches);
       document.getElementById('tavba-scan-status').innerHTML =
-        '<span style="background:rgba(39,174,96,0.85);color:#fff;font-size:12px;padding:4px 14px;border-radius:20px">✅ Nájdená: ' + matchedTok + ' (' + matchedItems.length + ' zhôd)</span>';
-      // Bliknutie čiary
+        '<span style="background:rgba(39,174,96,0.85);color:#fff;font-size:12px;padding:4px 14px;border-radius:20px">✅ ' + tok + ' (' + matches.length + ' zhôd)</span>';
       var line = document.getElementById('scan-line');
       if (line) { line.style.background='#27ae60'; setTimeout(function(){if(line)line.style.background='rgba(79,124,255,0.8)';},600); }
-    } else if (!matchedTok) {
-      // Zobraz čo prečítal
+    } else if (!matches.length && tok !== _tavbaLastResult) {
+      // Prečítal ale nenašiel v sklade — zobraz čo prečítal
+      _tavbaLastResult = tok;
       document.getElementById('tavba-scan-status').innerHTML =
-        '<span style="background:rgba(0,0,0,0.6);color:#f59e0b;font-size:11px;padding:4px 14px;border-radius:20px">👁 ' + tokens.slice(0,3).join(' · ') + '</span>';
+        '<span style="background:rgba(0,0,0,0.6);color:#f59e0b;font-size:12px;padding:4px 14px;border-radius:20px">👁 Prečítané: ' + tok + ' — nie v sklade</span>';
+      document.getElementById('tavba-manual-inp').value = tok;
+      renderTavbaResults(tok, []);
     }
-  } catch(e) {}
+  } catch(e) {
+    document.getElementById('tavba-scan-status').innerHTML =
+      '<span style="background:rgba(200,50,50,0.7);color:#fff;font-size:11px;padding:4px 14px;border-radius:20px">⚠ ' + e.message + '</span>';
+  }
 }
 
 function searchTavba(q) {
@@ -1994,10 +2006,29 @@ function searchTavba(q) {
   renderTavbaResults(q, searchTavbaInItems(q));
 }
 
+function normTavba(s) {
+  // Normalizuj: uppercase, odstráň /, -, medzery, O→0, I→1, E→(nechaj), S→5 nie
+  return (s||'').toUpperCase().replace(/[\s\/\-\.]/g, '').replace(/O/g,'0').replace(/\bI\b/g,'1');
+}
+
 function searchTavbaInItems(q) {
+  if (!q || q.length < 3) return [];
+  var qn = normTavba(q);
   return items
     .map(function(it, idx) { return { it: it, idx: idx }; })
-    .filter(function(r) { return (r.it.tavba||'').toUpperCase().includes(q) && parseFloat(r.it.zostatok) > 0; });
+    .filter(function(r) {
+      if (parseFloat(r.it.zostatok) <= 0) return false;
+      var t = (r.it.tavba || '').toUpperCase();
+      var tn = normTavba(t);
+      // Priamy match
+      if (t.includes(q) || tn.includes(qn)) return true;
+      // Fuzzy: porovnaj číselné podreťazce (min 4 číslice)
+      var nums = qn.match(/\d{4,}/g) || [];
+      for (var i = 0; i < nums.length; i++) {
+        if (tn.includes(nums[i])) return true;
+      }
+      return false;
+    });
 }
 
 function renderTavbaResults(q, matches) {
