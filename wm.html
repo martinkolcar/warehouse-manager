@@ -565,140 +565,138 @@ function parseHtml(html, filename) {
   const dom = new DOMParser().parseFromString(html, 'text/html');
   const result = [];
 
-  // Číslo DL z HTML textu alebo z názvu súboru
-  const dlMatch = html.match(/DL[\s_-]*(?:CZ|SK|SE|HU)?[\s_-]*\d{4}[\s_-]*[\d\/\-]+/i)
+  // Číslo DL
+  const dlMatch = html.match(/DL[\s_\-]*(?:CZ|SK|SE|HU)?[\s_\-]*\d{4}[\s_\-]*[\d\/\-]+/i)
     || html.match(/DL\d{4}\/[\d]+\/[\d]+/);
   const dlCislo = dlMatch ? dlMatch[0].replace(/\s/g,'') : filename.replace(/\.[^.]+$/,'');
+  const today = new Date().toISOString().split('T')[0];
 
   for (const tbl of dom.querySelectorAll('table')) {
     const rows = [...tbl.querySelectorAll('tr')];
     if (rows.length < 2) continue;
 
-    // ── Detekcia formátu ──────────────────────────────────────────
-    // Formát A: Description | Rozmer | Norma | [Pozn] | Qty | ✓ | Tavba
-    // Formát B: Pos | Description | Rozmer | Norma | (prázdny) | KS | Tavba
-    // Formát C (Lignarec): Sekcia | Typ | DN | Rozmer | Norma | Qty | Tavba
-    let format = 'A';
-    let dataRows = [];
+    // Nájdi hlavičkový riadok a zisti formát
+    let format = null;
+    let dataStart = 0;
 
-    for (let ri = 0; ri < rows.length; ri++) {
+    for (let ri = 0; ri < Math.min(rows.length, 5); ri++) {
       const cells = [...rows[ri].querySelectorAll('td,th')].map(c => c.textContent.trim());
-      const joined = cells.join('|').toLowerCase();
+      const uniq = cells.filter((c,i,a) => a.indexOf(c) === i);
+      const j = uniq.join('|').toLowerCase();
 
-      // Detekuj hlavičkový riadok
-      if (joined.includes('description') || joined.includes('ks') || joined.includes('tavba')) {
-        const nextRow = rows[ri+2] ? [...rows[ri+2].querySelectorAll('td,th')].map(c=>c.textContent.trim()) : [];
-        if (cells.length >= 6 && (joined.includes('ks') || joined.includes('tavba'))) {
-          if (nextRow.length >= 6 && /^\d+$/.test(nextRow[0].replace(/\s/g,''))) {
-            format = 'B';
-          }
+      if (j.includes('description') || (j.includes('ks') && j.includes('tavba'))) {
+        // Pozri prvý dátový riadok (ri+1, nie ri+2)
+        const d = rows[ri+1] ? [...rows[ri+1].querySelectorAll('td,th')].map(c=>c.textContent.trim()).filter((c,i,a)=>a.indexOf(c)===i) : [];
+        
+        if (d[0] && /^\d+$/.test(d[0].replace(/\s/g,''))) {
+          // Formát B: prvý dátový riadok začína číslom (pos)
+          format = 'B';
+          dataStart = ri + 1;
+        } else if (d[0] && !/^(pipe|elbow|reducer|tee|flange|cap|socket|weld|blank|hex)/i.test(d[0]) &&
+                   d[1] && /elbow|reducer|pipe|tee|flange|cap|socket|weld|blank|hex/i.test(d[1]) &&
+                   d[2] && /\d+[\.,]\d+/.test(d[2])) {
+          // Formát C: prvá bunka = dodávateľ, druhá = typ, tretia = rozmer
+          format = 'C';
+          dataStart = ri + 1;
+        } else {
+          // Formát A
+          format = 'A';
+          dataStart = ri + 1;
         }
-        dataRows = rows.slice(ri + 2);
         break;
       }
 
-      // Formát C: dodávateľ v col0, typ fitingu v col1, rozmer v col2
-      // Sulfaloop | Elbow Type A, 3D | 26.7x2 | norma | qty✓ | tavba
-      if (cells.length >= 5 && cells[0] && !/^\d+$/.test(cells[0]) &&
-          cells[1] && /elbow|reducer|pipe|tee|flange|cap|socket|hexagonal|bend|weld/i.test(cells[1]) &&
-          cells[2] && /\d+[\.,]\d+/.test(cells[2])) {
+      // Bez hlavičky — formát C (prvá bunka dodávateľ, druhá typ, tretia rozmer)
+      if (uniq.length >= 5 && uniq[0] && !/^\d+$/.test(uniq[0]) &&
+          uniq[1] && /elbow|reducer|pipe|tee|flange|cap|socket|weld|blank|hex/i.test(uniq[1]) &&
+          uniq[2] && /\d+[\.,]\d+/.test(uniq[2])) {
         format = 'C';
-        dataRows = rows.slice(ri);
+        dataStart = ri;
         break;
       }
 
-      // Formát B bez hlavičky
-      if (/^\d+$/.test(cells[0]) && cells[1] && /elbow|reducer|pipe|tee|flange|cap|t-piece|bend/i.test(cells[1])) {
+      // Bez hlavičky — formát B (prvá bunka číslo)
+      if (/^\d+$/.test((uniq[0]||'').replace(/\s/g,'')) && uniq[1] &&
+          /elbow|reducer|pipe|tee|flange|cap|t-piece|bend/i.test(uniq[1])) {
         format = 'B';
-        dataRows = rows.slice(ri);
+        dataStart = ri;
         break;
       }
     }
 
-    if (!dataRows.length) continue;
+    if (!format) continue;
 
-    for (const row of dataRows) {
-      const cells = [...row.querySelectorAll('td,th')].map(c => c.textContent.trim());
+    for (let ri = dataStart; ri < rows.length; ri++) {
+      const raw = [...rows[ri].querySelectorAll('td,th')].map(c => c.textContent.trim());
+      // Deduplikuj zlúčené bunky
+      const cells = raw.filter((c,i) => raw.indexOf(c) === i);
       if (cells.length < 3) continue;
 
-      let desc, rozmer, norma, qtyRaw, tavbaRaw;
+      let desc='', rozmer='', norma='', qtyRaw='', tavbaRaw='';
 
       if (format === 'B') {
-        // Pos | Typ | Rozmer | Norma | (prázdny) | KS | Tavba
+        // Pos | Desc | Rozmer | Norma | (empty) | qty✓ | tavba
         if (!/^\d+$/.test((cells[0]||'').replace(/\s/g,''))) continue;
-        desc     = cells[1] || '';
-        rozmer   = cells[2] || '';
-        norma    = cells[3] || '';
-        qtyRaw   = cells[5] || '';
-        tavbaRaw = cells[6] || '';
+        desc=cells[1]; rozmer=cells[2]; norma=cells[3];
+        // qty a tavba — nájdi za norma
+        let qf=false;
+        for (let i=4;i<cells.length;i++) {
+          const v=cells[i].replace(/[✓√\s]/g,'');
+          if(!v) continue;
+          if(!qf&&/^[\d,\.]+$/.test(v)){qtyRaw=v;qf=true;}
+          else if(qf){tavbaRaw=cells[i];break;}
+        }
+
       } else if (format === 'C') {
-        // Formát C (Sulfaloop/Lignarec/Dryer):
-        // Dodávateľ | Typ fitingu | Rozmer | Norma | KS✓ | Tavba
-        if (!cells[1] || !cells[2]) continue;
-        // Preskočiť ak prvá bunka neobsahuje názov dodávateľa (prázdny riadok)
-        if (!cells[0] && !cells[1]) continue;
-        desc     = cells[1] || '';  // Elbow Type A, 3D (r=1.5xD)
-        rozmer   = cells[2] || '';  // 26.7x2
-        norma    = cells[3] || '';  // 1.4307, EN 10253-4, 3.1
-        qtyRaw   = cells[4] || '';  // 4✓
-        tavbaRaw = cells[5] || '';  // 0474306
+        // Dodávateľ | Desc | Rozmer | Norma | qty✓ | tavba
+        if (!cells[0]||!cells[1]) continue;
+        if (!/elbow|reducer|pipe|tee|flange|cap|socket|weld|blank|hex/i.test(cells[1])) continue;
+        desc=cells[1]; rozmer=cells[2]; norma=cells[3];
+        qtyRaw=cells[4]||''; tavbaRaw=cells[5]||'';
+
       } else {
-        // Formát A: Typ | Rozmer | Norma | [Pozn] | Qty | ✓ | Tavba
-        desc   = cells[0] || '';
-        rozmer = cells[1] || '';
-        norma  = cells[2] || '';
-        qtyRaw = ''; tavbaRaw = '';
-        let qtyFound = false;
-        for (let i = 3; i < cells.length; i++) {
-          const raw = cells[i].replace(/[✓√\s]/g,'');
-          if (!raw) continue;
-          if (!qtyFound) {
-            if (/^[\d,\.]+$/.test(raw)) { qtyRaw = raw; qtyFound = true; }
+        // Formát A: Desc | Rozmer | Norma | [Pozn] | qty✓ | [✓] | tavba
+        desc=cells[0]; rozmer=cells[1]; norma=cells[2];
+        let qf=false;
+        for (let i=3;i<cells.length;i++) {
+          const v=cells[i].replace(/[✓√\s]/g,'');
+          if(!v) continue;
+          if(!qf) {
+            if(/^[\d,\.]+$/.test(v)){qtyRaw=v;qf=true;}
+            // inak = poznamka, preskočiť
           } else {
-            tavbaRaw = cells[i];
+            // Preskočiť samostatné ✓
+            if(v==='✓'||v==='√') continue;
+            tavbaRaw=cells[i]; break;
           }
         }
       }
 
-      if (!desc || !rozmer) continue;
+      if (!desc||!rozmer) continue;
 
-      // Vyčisti rozmer
+      // Vyčisti rozmer — vezmi prvú hodnotu
       rozmer = rozmer.split(/\s+/)[0].replace(',','.');
 
+      // Qty — vyčisti ✓
       const qty = parseFloat((qtyRaw||'').replace(/[✓√\s]/g,'').replace(',','.')) || 0;
-      if (qty === 0) continue;
+      if (qty===0) continue;
 
       const tavba = (tavbaRaw||'').replace(/[✓√]/g,'').trim();
       const isPipe = desc.toLowerCase().includes('pipe');
       const matMatch = norma.match(/^([A-Z0-9][A-Za-z0-9]*)/);
       const material = matMatch ? matMatch[1] : (norma.split(',')[0]||'').trim();
 
-      // Multi-tavba split pre non-pipe
+      // Multi-tavba split pre non-pipe: "S3805-21ks,1221261-83ks"
       if (!isPipe && tavba && tavba.includes(',')) {
-        const segments = tavba.split(',').map(s=>s.trim()).filter(Boolean);
-        const parsed = segments.map(seg => {
-          const m = seg.match(/^(.+?)-?(\d+)\s*ks?$/i);
-          return m ? { tavba: m[1].trim(), qty: parseFloat(m[2]) } : null;
-        });
-        if (parsed.every(p=>p!==null)) {
-          parsed.forEach(p => result.push({
-            typ: desc, rozmer, material, norma,
-            jednotka: 'ks', zostatok: p.qty, tavba: p.tavba,
-            poznamka: '', zdroj_dl: dlCislo,
-            datum: new Date().toISOString().split('T')[0],
-          }));
+        const segs = tavba.split(',').map(s=>s.trim()).filter(Boolean);
+        const parsed = segs.map(s=>{ const m=s.match(/^(.+?)-?(\d+)\s*ks?$/i); return m?{tavba:m[1].trim(),qty:parseFloat(m[2])}:null; });
+        if (parsed.every(p=>p)) {
+          parsed.forEach(p=>result.push({typ:desc,rozmer,material,norma,jednotka:'ks',zostatok:p.qty,tavba:p.tavba,poznamka:'',zdroj_dl:dlCislo,datum:today}));
           continue;
         }
       }
 
-      result.push({
-        typ: desc, rozmer, material, norma,
-        jednotka: isPipe ? 'm' : 'ks',
-        zostatok: qty, tavba,
-        poznamka: '',
-        zdroj_dl: dlCislo,
-        datum: new Date().toISOString().split('T')[0],
-      });
+      result.push({typ:desc,rozmer,material,norma,jednotka:isPipe?'m':'ks',zostatok:qty,tavba,poznamka:'',zdroj_dl:dlCislo,datum:today});
     }
   }
   return result;
