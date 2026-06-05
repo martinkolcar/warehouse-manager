@@ -277,9 +277,9 @@ table.main td.center { text-align: center; }
   <label>Typ:</label>
   <select id="f-typ" onchange="render()"><option value="">— všetky —</option></select>
   <label>Rozmer:</label>
-  <input id="f-rozmer" placeholder="napr. 114.3" oninput="render()">
+  <select id="f-rozmer" onchange="render()"><option value="">— všetky —</option></select>
   <label>Materiál:</label>
-  <input id="f-mat" placeholder="napr. P235GH" oninput="render()">
+  <select id="f-mat" onchange="render()"><option value="">— všetky —</option></select>
   <button class="btn btn-gray" onclick="clearFilters()">× Vyčistiť</button>
 </div>
 
@@ -391,14 +391,14 @@ function save() {
 
 // ─── RENDER TABUĽKY ───────────────────────────
 function render() {
-  const fTyp    = document.getElementById('f-typ').value.toLowerCase();
-  const fRozmer = document.getElementById('f-rozmer').value.toLowerCase();
-  const fMat    = document.getElementById('f-mat').value.toLowerCase();
+  const fTyp    = document.getElementById('f-typ').value;
+  const fRozmer = document.getElementById('f-rozmer').value;
+  const fMat    = document.getElementById('f-mat').value;
 
   const filtered = items.filter(it =>
-    (!fTyp    || it.typ.toLowerCase().includes(fTyp)) &&
-    (!fRozmer || it.rozmer.toLowerCase().includes(fRozmer)) &&
-    (!fMat    || (it.material||'').toLowerCase().includes(fMat))
+    (!fTyp    || it.typ === fTyp) &&
+    (!fRozmer || it.rozmer === fRozmer) &&
+    (!fMat    || (it.material||'') === fMat)
   );
 
   document.getElementById('count-text').textContent =
@@ -410,6 +410,7 @@ function render() {
     tbody.innerHTML = `<tr class="empty-row"><td colspan="12">${
       items.length ? 'Žiadne výsledky pre filter.' : 'Sklad je prázdny. Nahrajte dodací list.'
     }</td></tr>`;
+    populateMainFilters();
     return;
   }
 
@@ -438,12 +439,27 @@ function render() {
     </tr>`;
   }).join('');
 
-  // Aktualizuj filter dropdown
-  const typy = [...new Set(items.map(it => it.typ))].sort();
-  const sel = document.getElementById('f-typ');
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">— všetky —</option>' +
-    typy.map(t => `<option value="${t}"${t===cur?' selected':''}>${t}</option>`).join('');
+  populateMainFilters();
+}
+
+function populateMainFilters() {
+  const curTyp    = document.getElementById('f-typ').value;
+  const curRozmer = document.getElementById('f-rozmer').value;
+  const curMat    = document.getElementById('f-mat').value;
+
+  const typy    = [...new Set(items.map(it => it.typ).filter(Boolean))].sort();
+  const rozmery = [...new Set(items.map(it => it.rozmer).filter(Boolean))].sort();
+  const maty    = [...new Set(items.map(it => it.material).filter(Boolean))].sort();
+
+  document.getElementById('f-typ').innerHTML =
+    '<option value="">— všetky typy —</option>' +
+    typy.map(v => `<option value="${v}"${v===curTyp?' selected':''}>${v}</option>`).join('');
+  document.getElementById('f-rozmer').innerHTML =
+    '<option value="">— všetky rozmery —</option>' +
+    rozmery.map(v => `<option value="${v}"${v===curRozmer?' selected':''}>${v}</option>`).join('');
+  document.getElementById('f-mat').innerHTML =
+    '<option value="">— všetky materiály —</option>' +
+    maty.map(v => `<option value="${v}"${v===curMat?' selected':''}>${v}</option>`).join('');
 }
 
 function typClass(typ) {
@@ -836,11 +852,11 @@ render();
     <!-- Header -->
     <div class="vyd-header">
       <h2>📋 Výdajka</h2>
-      <span id="vyd-number" style="font-family:monospace;font-size:12px;color:#9a9bb0"></span>
+      <span id="vyd-iso-label" style="font-family:monospace;font-size:13px;color:#9a9bb0;margin-left:8px"></span>
       <div style="flex:1"></div>
       <button class="btn" style="background:#6b7280;color:#fff;padding:6px 14px" onclick="openVydNahlad()">👁 Náhľad</button>
-      <button class="btn" style="background:#27ae60;color:#fff;padding:6px 14px;margin-left:6px" onclick="saveVydajka('pdf')">📄 Uložiť celú výdajku + PDF</button>
-      <button class="btn" style="background:#4f7cff;color:#fff;padding:6px 14px;margin-left:6px" onclick="saveVydajka('save')">💾 Uložiť celú výdajku</button>
+      <button class="btn" style="background:#27ae60;color:#fff;padding:6px 14px;margin-left:6px" onclick="saveVydajka('pdf')">📄 Uložiť + PDF</button>
+      <button class="btn" style="background:#4f7cff;color:#fff;padding:6px 14px;margin-left:6px" onclick="saveVydajka('save')">💾 Uložiť</button>
       <button class="btn" style="background:#374151;color:#fff;margin-left:14px;padding:6px 14px" onclick="closeVydajka()">✕ Zavrieť</button>
     </div>
     <!-- Body -->
@@ -875,9 +891,9 @@ render();
           <label>Typ:</label>
           <select id="vf-typ" onchange="renderVydMatList()"><option value="">— všetky —</option></select>
           <label>Rozmer:</label>
-          <input id="vf-rozmer" placeholder="napr. 114.3" oninput="renderVydMatList()" style="width:110px">
+          <select id="vf-rozmer" onchange="renderVydMatList()" style="min-width:110px"><option value="">— všetky —</option></select>
           <label>Materiál:</label>
-          <input id="vf-mat" placeholder="napr. P235GH" oninput="renderVydMatList()" style="width:110px">
+          <select id="vf-mat" onchange="renderVydMatList()" style="min-width:110px"><option value="">— všetky —</option></select>
           <button class="btn btn-gray" style="padding:4px 10px;font-size:12px" onclick="clearVydFilters()">× reset</button>
           <span id="vf-count" style="font-size:11px;color:#888;margin-left:4px"></span>
         </div>
@@ -929,49 +945,78 @@ const ISOS = {
 
 // ─── VÝDAJKA STATE ────────────────────────────
 let vydajkyList = JSON.parse(localStorage.getItem('vydajky') || '[]');
-let vydLines = [];        // riadky aktuálnej výdajky
-let vydIso = null;        // aktuálne vybraná izometria
+let vydLines = [];
+let vydIso = null;
 let vydIsoSec = null;
+let vydEditIdx = null;  // null = nová, číslo = editujeme existujúcu
 
 function openVydajkaWindow() {
-  const n = genVydNumber();
-  document.getElementById('vyd-number').textContent = n;
+  vydEditIdx = null;
   vydLines = [];
   vydIso = null;
   vydIsoSec = null;
+  resetVydPanel();
+  document.getElementById('vyd-overlay').classList.add('open');
+}
 
-  // Reset bočný panel
+function editVydajka(idx) {
+  const v = vydajkyList[idx];
+  if (!v) return;
+  vydEditIdx = idx;
+  vydIso = v.iso;
+  vydIsoSec = v.sec;
+
+  // Načítaj riadky — nájdi itemIdx v sklade podľa typ+rozmer+tavba
+  vydLines = v.lines.map(l => {
+    const itemIdx = items.findIndex(it =>
+      it.typ === l.typ && it.rozmer === l.rozmer && it.tavba === l.tavba
+    );
+    return {
+      itemIdx: itemIdx >= 0 ? itemIdx : null,
+      typ: l.typ, rozmer: l.rozmer, material: l.material,
+      norma: l.norma, tavba: l.tavba, jednotka: l.jednotka,
+      isPipe: l.isPipe || false,
+      vydQty: l.isPipe ? '' : l.vydQty,
+      dlzka: l.isPipe ? (l.dlzka || String(Math.round((l.vydQty||0)*1000))) : '',
+      spCislo: l.spCislo || '',
+      stockMax: itemIdx >= 0 ? (parseFloat(items[itemIdx].zostatok)||0) : 0,
+    };
+  });
+
+  resetVydPanel();
+
+  // Zobraz izometriu priamo — preskoč výber
+  selectVydIsoSilent(v.iso, v.sec);
+
+  // Naplň riadky
+  const panel = document.getElementById('vyd-lines-panel');
+  panel.style.display = 'flex';
+  panel.style.flexDirection = 'column';
+  renderVydLines();
+
+  document.getElementById('vyd-overlay').classList.add('open');
+}
+
+function resetVydPanel() {
   const panel = document.getElementById('vyd-iso-panel');
   panel.style.display = 'flex';
   panel.style.flexDirection = 'column';
-
-  // Reset titulok
   const titleEl = document.getElementById('vyd-iso-title');
   titleEl.textContent = '← Vyberte izometriu zo zoznamu';
   titleEl.className = 'vyd-iso-title empty';
   document.getElementById('vyd-zmenit-btn').style.display = 'none';
-
+  document.getElementById('vyd-iso-label').textContent = '';
   document.getElementById('vyd-mat-filters').style.display = 'none';
   document.getElementById('vyd-mat-list').innerHTML = '<div style="text-align:center;padding:40px;color:#aaa;font-size:13px">Vyberte izometriu</div>';
   document.getElementById('vyd-lines-panel').style.display = 'none';
   document.getElementById('vyd-lines-tbody').innerHTML = '';
   document.getElementById('vyd-iso-inp').value = '';
   renderIsoList('');
-  document.getElementById('vyd-overlay').classList.add('open');
 }
 
 function closeVydajka() {
-  if (vydLines.length && !confirm('Máte neuložené riadky. Naozaj zavrieť?')) return;
+  if (vydLines.length && !confirm('Máte neuložené zmeny. Naozaj zavrieť?')) return;
   document.getElementById('vyd-overlay').classList.remove('open');
-}
-
-function genVydNumber() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth()+1).padStart(2,'0');
-  const dd = String(d.getDate()).padStart(2,'0');
-  const seq = (vydajkyList.length + 1).toString().padStart(3,'0');
-  return `VYD-${yyyy}${mm}${dd}-${seq}`;
 }
 
 // ─── ISO LIST (ľavý panel) ────────────────────
@@ -1013,61 +1058,80 @@ function renderIsoList(q) {
 function selectVydIso(iso, sec) {
   vydIso = iso;
   vydIsoSec = sec;
+  selectVydIsoSilent(iso, sec);
+  renderVydMatList();
+}
 
-  // Skry bočný panel izometrií — sme na trase
+function selectVydIsoSilent(iso, sec) {
+  // Skry bočný panel
   document.getElementById('vyd-iso-panel').style.display = 'none';
 
-  // Zobraz názov trasy + tlačidlo zmeniť
+  // Label v hlavičke
+  document.getElementById('vyd-iso-label').innerHTML =
+    `<span style="color:#4f7cff;font-weight:700">${iso}</span>` +
+    `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:3px;font-size:11px;margin-left:8px;font-family:inherit">${sec}</span>`;
+
+  // Titulok v pravom paneli
   const titleEl = document.getElementById('vyd-iso-title');
-  titleEl.innerHTML = `<span style="font-size:11px;color:#888;font-family:inherit;font-weight:400;margin-right:6px">Trasa:</span>${iso} <span style="font-size:11px;background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:3px;margin-left:6px;font-family:inherit">${sec}</span>`;
+  titleEl.innerHTML = `<span style="font-size:11px;color:#888;font-family:inherit;font-weight:400;margin-right:4px">Trasa:</span><strong>${iso}</strong>`;
   titleEl.className = 'vyd-iso-title';
   document.getElementById('vyd-zmenit-btn').style.display = 'inline-block';
-
   document.getElementById('vyd-mat-filters').style.display = 'flex';
 
-  // Aktualizuj filter dropdown pre typy
+  // Filter typy
   const typy = [...new Set(items.map(it => it.typ))].sort();
   const sel = document.getElementById('vf-typ');
   sel.innerHTML = '<option value="">— všetky —</option>' +
     typy.map(t => `<option value="${t}">${t}</option>`).join('');
   document.getElementById('vf-rozmer').value = '';
   document.getElementById('vf-mat').value = '';
-
-  renderVydMatList();
 }
 
-function zmenitTrasu() {
-  if (vydLines.length) {
+function zmenitTrasu(silent) {
+  if (!silent && vydLines.length) {
     const akcia = confirm(
-      `Výdajka "${document.getElementById('vyd-number').textContent}" obsahuje ${vydLines.length} položiek a nie je uložená.\n\n` +
-      `Stlačte OK → Uložiť výdajku a zmeniť trasu\n` +
-      `Stlačte Zrušiť → Zahodiť a zmeniť trasu`
+      `Výdajka pre "${vydIso}" obsahuje ${vydLines.length} položiek a nie je uložená.\n\n` +
+      `OK → Uložiť a zmeniť trasu\n` +
+      `Zrušiť → Zahodiť a zmeniť trasu`
     );
-    if (akcia) {
-      // Uloží výdajku bez zatvorenia okna
-      saveVydajka('save');
-    } else {
-      // Zahodí riadky
-      vydLines = [];
-      document.getElementById('vyd-lines-tbody').innerHTML = '';
-      document.getElementById('vyd-lines-panel').style.display = 'none';
-      updateVydCount();
-      document.getElementById('vyd-number').textContent = genVydNumber();
-    }
+    if (akcia) { saveVydajka('save'); return; }
+    vydLines = [];
+    document.getElementById('vyd-lines-tbody').innerHTML = '';
+    document.getElementById('vyd-lines-panel').style.display = 'none';
+    updateVydCount();
   }
-  // Zobraz bočný panel a resetuj
-  vydIso = null;
-  vydIsoSec = null;
-  document.getElementById('vyd-iso-panel').style.display = 'flex';
-  document.getElementById('vyd-iso-panel').style.flexDirection = 'column';
+  vydIso = null; vydIsoSec = null; vydEditIdx = null;
+  const panel = document.getElementById('vyd-iso-panel');
+  panel.style.display = 'flex'; panel.style.flexDirection = 'column';
   const titleEl = document.getElementById('vyd-iso-title');
   titleEl.textContent = '← Vyberte izometriu zo zoznamu';
   titleEl.className = 'vyd-iso-title empty';
   document.getElementById('vyd-zmenit-btn').style.display = 'none';
+  document.getElementById('vyd-iso-label').textContent = '';
   document.getElementById('vyd-mat-filters').style.display = 'none';
   document.getElementById('vyd-mat-list').innerHTML = '<div style="text-align:center;padding:40px;color:#aaa;font-size:13px">Vyberte izometriu</div>';
   document.getElementById('vyd-iso-inp').value = '';
   renderIsoList('');
+}
+
+// ─── NÁHĽAD ───────────────────────────────────
+function openVydNahlad() {
+  if (!vydIso) { alert('Vyberte izometriu'); return; }
+  if (!vydLines.length) { alert('Výdajka je prázdna'); return; }
+  document.querySelectorAll('#vyd-lines-tbody .inp-qty').forEach(inp => {
+    const i = parseInt(inp.dataset.idx);
+    if (!isNaN(i) && vydLines[i]) vydLines[i].vydQty = parseFloat(inp.value)||0;
+  });
+  document.querySelectorAll('#vyd-lines-tbody .inp-dlzka').forEach(inp => {
+    const i = parseInt(inp.dataset.idx);
+    if (!isNaN(i) && vydLines[i]) vydLines[i].dlzka = inp.value;
+  });
+  document.querySelectorAll('#vyd-lines-tbody .inp-sp').forEach(inp => {
+    const i = parseInt(inp.dataset.idx);
+    if (!isNaN(i) && vydLines[i]) vydLines[i].spCislo = inp.value;
+  });
+  const datum = new Date().toISOString().split('T')[0];
+  openVydNahladFromData(buildVydajkaObj(datum));
 }
 
 function clearVydFilters() {
@@ -1080,43 +1144,51 @@ function clearVydFilters() {
 // ─── ZOZNAM MATERIÁLOV v pravom paneli ────────
 function renderVydMatList() {
   const fTyp    = document.getElementById('vf-typ').value;
-  const fRozmer = document.getElementById('vf-rozmer').value.toLowerCase();
-  const fMat    = document.getElementById('vf-mat').value.toLowerCase();
+  const fRozmer = document.getElementById('vf-rozmer').value;
+  const fMat    = document.getElementById('vf-mat').value;
   const el      = document.getElementById('vyd-mat-list');
-
   if (!vydIso) { el.innerHTML = ''; return; }
 
-  // Filtruj sklad
-  const filtered = items.filter(it => {
-    if (it.zostatok <= 0) return false;
-    if (fTyp    && it.typ !== fTyp) return false;
-    if (fRozmer && !(it.rozmer||'').toLowerCase().includes(fRozmer)) return false;
-    if (fMat    && !(it.material||'').toLowerCase().includes(fMat)) return false;
-    return true;
-  });
+  const avail   = items.filter(it => parseFloat(it.zostatok) > 0);
+  const filtered = avail.filter(it =>
+    (!fTyp    || it.typ === fTyp) &&
+    (!fRozmer || it.rozmer === fRozmer) &&
+    (!fMat    || (it.material||'') === fMat)
+  );
+
+  // Naplň selecty (kaskádovo)
+  const curR = fRozmer, curM = fMat;
+  const baseForR = avail.filter(it => !fTyp || it.typ === fTyp);
+  const baseForM = baseForR.filter(it => !fRozmer || it.rozmer === fRozmer);
+  const rozmery = [...new Set(baseForR.map(it=>it.rozmer).filter(Boolean))].sort();
+  const maty    = [...new Set(baseForM.map(it=>it.material).filter(Boolean))].sort();
+  document.getElementById('vf-rozmer').innerHTML =
+    '<option value="">— všetky —</option>' +
+    rozmery.map(v=>`<option value="${v}"${v===curR?' selected':''}>${v}</option>`).join('');
+  document.getElementById('vf-mat').innerHTML =
+    '<option value="">— všetky —</option>' +
+    maty.map(v=>`<option value="${v}"${v===curM?' selected':''}>${v}</option>`).join('');
 
   document.getElementById('vf-count').textContent = `${filtered.length} položiek`;
 
   if (!filtered.length) {
-    el.innerHTML = '<div style="text-align:center;padding:30px;color:#aaa;font-size:12px">Žiadne položky (sklad prázdny alebo filter)</div>';
+    el.innerHTML = '<div style="text-align:center;padding:30px;color:#aaa;font-size:12px">Žiadne položky</div>';
     return;
   }
 
-  const isPipe = (typ) => (typ||'').toLowerCase().includes('pipe');
-
-  el.innerHTML = filtered.map((it, i) => {
+  el.innerHTML = filtered.map(it => {
     const realIdx = items.indexOf(it);
-    const q = parseFloat(it.zostatok) || 0;
-    const qClass = q <= 0 ? 'qty-zero' : q < 3 ? 'qty-low' : 'qty-ok';
-    const qStr = it.jednotka === 'm' ? q.toFixed(2) + ' m' : q + ' ks';
-    const badge = `<span class="badge badge-${typClass(it.typ)}">${shortType(it.typ)}</span>`;
+    const q = parseFloat(it.zostatok)||0;
+    const qClass = q<=0?'qty-zero':q<3?'qty-low':'qty-ok';
+    const qStr = it.jednotka==='m'?q.toFixed(2)+' m':q+' ks';
     return `<div class="vyd-mat-row" onclick="addToVydajka(${realIdx})">
       <div class="mat-info">
-        <div>${badge} <span class="mat-rozmer">${it.rozmer}</span></div>
+        <div><span class="badge badge-${typClass(it.typ)}">${shortType(it.typ)}</span>
+          <span class="mat-rozmer" style="margin-left:6px">${it.rozmer}</span></div>
         <div class="mat-typ">${it.typ}</div>
-        <div class="mat-tavba">Tavba: ${it.tavba||'—'} &nbsp;|&nbsp; ${it.material||''} &nbsp;|&nbsp; ${it.norma||''}</div>
+        <div class="mat-tavba">Tavba: <strong>${it.tavba||'—'}</strong> &nbsp;|&nbsp; ${it.material||''} &nbsp;|&nbsp; <span style="color:#aaa">${it.norma||''}</span></div>
       </div>
-      <div style="text-align:right">
+      <div style="text-align:right;flex-shrink:0">
         <span class="mat-stock ${qClass}">${qStr}</span><br>
         <span style="font-size:10px;color:#aaa">${it.zdroj_dl||''}</span>
       </div>
@@ -1285,82 +1357,12 @@ function clearVydLines() {
   updateVydCount();
 }
 
-// ─── ULOŽIŤ / NÁHĽAD — výdajka ostáva otvorená ─────────────────────
+// ─── ULOŽIŤ ─────────────────────────────────
 function saveVydajka(mode) {
   if (!vydIso) { alert('Vyberte izometriu'); return; }
   if (!vydLines.length) { alert('Výdajka je prázdna'); return; }
 
-  const cislo = document.getElementById('vyd-number').textContent;
-  const datum = new Date().toISOString().split('T')[0];
-
-  if (mode === 'nahlad') {
-    // Iba náhľad — neukladá, neodčítava sklad
-    const v = buildVydajkaObj(cislo, datum);
-    openVydNahladFromData(v);
-    return;
-  }
-
-  // Odpočítaj zo skladu — rúry: mm ÷ 1000 → metre
-  vydLines.forEach(l => {
-    if (l.itemIdx === undefined || l.itemIdx === null) return;
-    const vydane = l.isPipe
-      ? (parseFloat(l.dlzka) || 0) / 1000   // mm → m
-      : (parseFloat(l.vydQty) || 0);         // ks
-    if (vydane > 0 && items[l.itemIdx]) {
-      const cur = parseFloat(items[l.itemIdx].zostatok) || 0;
-      items[l.itemIdx].zostatok = Math.round((cur - vydane) * 10000) / 10000;
-    }
-  });
-
-  const vydajka = buildVydajkaObj(cislo, datum);
-  vydajkyList.push(vydajka);
-  save();
-  localStorage.setItem('vydajky', JSON.stringify(vydajkyList));
-  render();
-
-  if (mode === 'pdf') {
-    openVydNahladFromData(vydajka);
-  }
-
-  // Výdajka zostáva otvorená — vymazať riadky a pripraviť novú
-  vydLines = [];
-  document.getElementById('vyd-lines-tbody').innerHTML = '';
-  document.getElementById('vyd-lines-panel').style.display = 'none';
-  updateVydCount();
-  // Vygeneruj nové číslo pre prípadnú ďalšiu výdajku
-  document.getElementById('vyd-number').textContent = genVydNumber();
-
-  setStatus(`✓ Výdajka ${cislo} uložená (${vydajka.lines.length} položiek, izometria: ${vydIso})`, 'ok');
-}
-
-function buildVydajkaObj(cislo, datum) {
-  return {
-    cislo,
-    iso: vydIso,
-    sec: vydIsoSec,
-    datum,
-    lines: vydLines.map(l => ({
-      typ:       l.typ,
-      rozmer:    l.rozmer,
-      material:  l.material,
-      norma:     l.norma,
-      tavba:     l.tavba,
-      jednotka:  l.jednotka,
-      isPipe:    l.isPipe || false,
-      vydQty:    l.isPipe
-                   ? Math.round((parseFloat(l.dlzka)||0) / 1000 * 10000) / 10000
-                   : (parseFloat(l.vydQty)||0),
-      dlzka:     l.dlzka  || '',
-      spCislo:   l.spCislo || ''
-    }))
-  };
-}
-
-// ─── NÁHĽAD VÝDAJKY ───────────────────────────
-function openVydNahlad() {
-  if (!vydIso) { alert('Vyberte izometriu'); return; }
-  if (!vydLines.length) { alert('Výdajka je prázdna'); return; }
-  // Synchronizuj hodnoty z DOM inputov (pre prípad že onchange ešte nebol)
+  // Sync DOM hodnôt
   document.querySelectorAll('#vyd-lines-tbody .inp-qty').forEach(inp => {
     const i = parseInt(inp.dataset.idx);
     if (!isNaN(i) && vydLines[i]) vydLines[i].vydQty = parseFloat(inp.value)||0;
@@ -1373,11 +1375,83 @@ function openVydNahlad() {
     const i = parseInt(inp.dataset.idx);
     if (!isNaN(i) && vydLines[i]) vydLines[i].spCislo = inp.value;
   });
-  const cislo = document.getElementById('vyd-number').textContent;
+
   const datum = new Date().toISOString().split('T')[0];
-  openVydNahladFromData(buildVydajkaObj(cislo, datum));
+
+  if (mode === 'nahlad') {
+    openVydNahladFromData(buildVydajkaObj(datum));
+    return;
+  }
+
+  if (vydEditIdx !== null) {
+    // ─── EDITÁCIA: vráť staré množstvá, odčítaj nové ───
+    const stara = vydajkyList[vydEditIdx];
+    // Vráť staré
+    (stara.lines||[]).forEach(l => {
+      const found = items.findIndex(it => it.typ===l.typ && it.rozmer===l.rozmer && it.tavba===l.tavba);
+      if (found >= 0) {
+        items[found].zostatok = Math.round(((parseFloat(items[found].zostatok)||0) + (parseFloat(l.vydQty)||0)) * 10000) / 10000;
+      }
+    });
+    // Odčítaj nové
+    odcitajSklad();
+    const vydajka = buildVydajkaObj(stara.datum);
+    vydajka.cislo = stara.cislo;
+    vydajkyList[vydEditIdx] = vydajka;
+    setStatus(`✓ Výdajka pre ${vydIso} aktualizovaná`, 'ok');
+  } else {
+    // ─── NOVÁ ───
+    odcitajSklad();
+    const vydajka = buildVydajkaObj(datum);
+    vydajkyList.push(vydajka);
+    setStatus(`✓ Výdajka pre ${vydIso} uložená`, 'ok');
+  }
+
+  save();
+  localStorage.setItem('vydajky', JSON.stringify(vydajkyList));
+  render();
+
+  if (mode === 'pdf') openVydNahladFromData(vydajkyList[vydEditIdx !== null ? vydEditIdx : vydajkyList.length-1]);
+
+  // Reset po uložení — priprav na novú
+  vydEditIdx = null;
+  vydLines = [];
+  document.getElementById('vyd-lines-tbody').innerHTML = '';
+  document.getElementById('vyd-lines-panel').style.display = 'none';
+  updateVydCount();
+  // Vráť výber trásy
+  zmenitTrasu(true);
 }
 
+function odcitajSklad() {
+  vydLines.forEach(l => {
+    if (l.itemIdx === undefined || l.itemIdx === null) return;
+    const vydane = l.isPipe ? (parseFloat(l.dlzka)||0)/1000 : (parseFloat(l.vydQty)||0);
+    if (vydane > 0 && items[l.itemIdx]) {
+      items[l.itemIdx].zostatok = Math.round(((parseFloat(items[l.itemIdx].zostatok)||0) - vydane) * 10000) / 10000;
+    }
+  });
+}
+
+function buildVydajkaObj(datum) {
+  const d = new Date();
+  const cislo = `VYD-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}-${String(vydajkyList.length+1).padStart(3,'0')}`;
+  return {
+    cislo,
+    iso: vydIso,
+    sec: vydIsoSec,
+    datum,
+    lines: vydLines.map(l => ({
+      typ: l.typ, rozmer: l.rozmer, material: l.material,
+      norma: l.norma, tavba: l.tavba, jednotka: l.jednotka,
+      isPipe: l.isPipe || false,
+      vydQty: l.isPipe ? Math.round((parseFloat(l.dlzka)||0)/1000*10000)/10000 : (parseFloat(l.vydQty)||0),
+      dlzka: l.dlzka||'', spCislo: l.spCislo||''
+    }))
+  };
+}
+
+// ─── NÁHĽAD VÝDAJKY ───────────────────────────
 function exportVydajkaPdf(v) {
   openVydNahladFromData(v);
 }
@@ -1496,7 +1570,7 @@ function buildVydPdfHtml(cislo, iso, sec, datum, rows, thPipe) {
 
 <!-- ZOZNAM VÝDAJOK MODAL -->
 <div id="zoznam-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1500;align-items:center;justify-content:center">
-  <div style="background:#fff;border-radius:12px;width:92vw;max-width:960px;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.25);overflow:hidden">
+  <div style="background:#fff;border-radius:12px;width:92vw;max-width:1000px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.25);overflow:hidden">
     <div style="background:#1a1a2e;color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0">
       <span style="font-size:15px;font-weight:700">📋 História výdajok</span>
       <span id="zoznam-count" style="font-size:11px;color:#9a9bb0"></span>
@@ -1504,16 +1578,28 @@ function buildVydPdfHtml(cislo, iso, sec, datum, rows, thPipe) {
       <button onclick="document.getElementById('zoznam-overlay').style.display='none'"
         style="background:none;border:1px solid #555;color:#ccc;padding:5px 14px;border-radius:5px;cursor:pointer;font-size:13px">✕ Zavrieť</button>
     </div>
-    <div style="flex:1;overflow-y:auto;padding:14px 18px">
-      <div id="zoznam-empty" style="display:none;text-align:center;padding:40px;color:#aaa;font-size:13px">Žiadne výdajky ešte neboli uložené.</div>
+    <!-- Filter vo výdajkách -->
+    <div style="padding:10px 18px;background:#f7f8fa;border-bottom:1px solid #dde1e7;display:flex;gap:10px;align-items:center;flex-wrap:wrap;flex-shrink:0">
+      <label style="font-size:12px;color:#555;font-weight:600">Hľadaj položku:</label>
+      <select id="zf-rozmer" onchange="renderZoznam()" style="padding:5px 8px;border:1px solid #ccc;border-radius:5px;font-size:12px;min-width:130px">
+        <option value="">— rozmer —</option>
+      </select>
+      <select id="zf-mat" onchange="renderZoznam()" style="padding:5px 8px;border:1px solid #ccc;border-radius:5px;font-size:12px;min-width:120px">
+        <option value="">— materiál —</option>
+      </select>
+      <input id="zf-tavba" oninput="renderZoznam()" placeholder="Tavba..." style="padding:5px 8px;border:1px solid #ccc;border-radius:5px;font-size:12px;width:120px">
+      <button onclick="clearZoznamFilter()" style="padding:5px 12px;border:1px solid #ccc;border-radius:5px;background:#fff;font-size:12px;cursor:pointer">× reset</button>
+      <span id="zf-info" style="font-size:11px;color:#888"></span>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:0 18px 14px">
+      <div id="zoznam-empty" style="display:none;text-align:center;padding:40px;color:#aaa;font-size:13px">Žiadne výdajky.</div>
       <table id="zoznam-table" style="width:100%;border-collapse:collapse;font-size:12px">
         <thead>
-          <tr style="background:#f0f2f5">
-            <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#666;border-bottom:2px solid #dde1e7;white-space:nowrap">Číslo výdajky</th>
+          <tr style="background:#f0f2f5;position:sticky;top:0;z-index:2">
             <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#666;border-bottom:2px solid #dde1e7">Izometria</th>
             <th style="padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;color:#666;border-bottom:2px solid #dde1e7">Sekcia</th>
             <th style="padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;color:#666;border-bottom:2px solid #dde1e7">Dátum</th>
-            <th style="padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;color:#666;border-bottom:2px solid #dde1e7">Položky</th>
+            <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#666;border-bottom:2px solid #dde1e7">Položky / Nájdené</th>
             <th style="padding:8px 10px;border-bottom:2px solid #dde1e7"></th>
           </tr>
         </thead>
@@ -1525,47 +1611,103 @@ function buildVydPdfHtml(cislo, iso, sec, datum, rows, thPipe) {
 
 <script>
 function openVydajkyZoznam() {
+  // Naplň filter selecty z vydajkyList
+  const allRozmery = [...new Set(vydajkyList.flatMap(v=>(v.lines||[]).map(l=>l.rozmer)).filter(Boolean))].sort();
+  const allMaty    = [...new Set(vydajkyList.flatMap(v=>(v.lines||[]).map(l=>l.material)).filter(Boolean))].sort();
+  document.getElementById('zf-rozmer').innerHTML =
+    '<option value="">— rozmer —</option>' +
+    allRozmery.map(v=>`<option value="${v}">${v}</option>`).join('');
+  document.getElementById('zf-mat').innerHTML =
+    '<option value="">— materiál —</option>' +
+    allMaty.map(v=>`<option value="${v}">${v}</option>`).join('');
+  document.getElementById('zf-tavba').value = '';
+  renderZoznam();
+  document.getElementById('zoznam-overlay').style.display = 'flex';
+}
+
+function clearZoznamFilter() {
+  document.getElementById('zf-rozmer').value = '';
+  document.getElementById('zf-mat').value = '';
+  document.getElementById('zf-tavba').value = '';
+  renderZoznam();
+}
+
+function renderZoznam() {
+  const fRozmer = document.getElementById('zf-rozmer').value;
+  const fMat    = document.getElementById('zf-mat').value;
+  const fTavba  = document.getElementById('zf-tavba').value.toLowerCase().trim();
+  const tbody   = document.getElementById('zoznam-tbody');
+  const hasFilter = fRozmer || fMat || fTavba;
+
   const list = vydajkyList;
-  const tbody = document.getElementById('zoznam-tbody');
   document.getElementById('zoznam-count').textContent = list.length + ' výdajok';
 
   if (!list.length) {
     tbody.innerHTML = '';
     document.getElementById('zoznam-empty').style.display = 'block';
     document.getElementById('zoznam-table').style.display = 'none';
-  } else {
-    document.getElementById('zoznam-empty').style.display = 'none';
-    document.getElementById('zoznam-table').style.display = 'table';
-    tbody.innerHTML = [...list].reverse().map((v, ri) => {
-      const realIdx = list.length - 1 - ri;
-      const lineCount = (v.lines||[]).length;
-      return `<tr style="border-bottom:1px solid #eef0f4" onmouseover="this.style.background='#f5f7ff'" onmouseout="this.style.background=''">
-        <td style="padding:8px 10px;font-family:monospace;font-weight:700;color:#4f7cff">${v.cislo}</td>
-        <td style="padding:8px 10px;font-family:monospace;font-size:11px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.iso}</td>
-        <td style="padding:8px 10px;text-align:center">
-          <span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700">${v.sec||'—'}</span>
-        </td>
-        <td style="padding:8px 10px;text-align:center;color:#666">${v.datum}</td>
-        <td style="padding:8px 10px;text-align:center;font-weight:700">${lineCount}</td>
-        <td style="padding:8px 10px;white-space:nowrap;text-align:right">
-          <button class="act-btn" onclick="openVydNahladFromData(vydajkyList[${realIdx}])" style="color:#4f7cff;border-color:#4f7cff">👁 Náhľad / PDF</button>
-          <button class="act-btn del" onclick="deleteVydajka(${realIdx})">🗑 Vymazať</button>
-        </td>
-      </tr>`;
-    }).join('');
+    return;
   }
-  document.getElementById('zoznam-overlay').style.display = 'flex';
+  document.getElementById('zoznam-empty').style.display = 'none';
+  document.getElementById('zoznam-table').style.display = 'table';
+
+  let shown = 0;
+  tbody.innerHTML = [...list].reverse().map((v, ri) => {
+    const realIdx = list.length - 1 - ri;
+    const lines = v.lines || [];
+
+    // Nájdi matchujúce položky
+    const matched = hasFilter ? lines.filter(l =>
+      (!fRozmer || l.rozmer === fRozmer) &&
+      (!fMat    || (l.material||'') === fMat) &&
+      (!fTavba  || (l.tavba||'').toLowerCase().includes(fTavba))
+    ) : [];
+
+    // Ak je filter aktívny a nič nenájde → preskočiť
+    if (hasFilter && matched.length === 0) return '';
+    shown++;
+
+    const matchHtml = matched.length
+      ? '<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">' +
+        matched.map(l => `<span style="font-size:10px;background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:3px;font-family:monospace">
+          ${l.rozmer} · ${l.material||''} · <strong>${l.tavba||'—'}</strong> · ${l.vydQty} ${l.jednotka}</span>`).join('') +
+        '</div>'
+      : '';
+
+    return `<tr style="border-bottom:1px solid #eef0f4" onmouseover="this.style.background='#f5f7ff'" onmouseout="this.style.background=''">
+      <td style="padding:8px 10px;font-family:monospace;font-size:11px;max-width:280px">
+        <strong style="color:#1a1a2e">${v.iso}</strong>
+        ${matchHtml}
+      </td>
+      <td style="padding:8px 10px;text-align:center">
+        <span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700">${v.sec||'—'}</span>
+      </td>
+      <td style="padding:8px 10px;text-align:center;color:#666;white-space:nowrap">${v.datum}</td>
+      <td style="padding:8px 10px;color:#666;font-size:11px">
+        ${lines.length} položiek
+        ${matched.length ? `<span style="color:#1d4ed8;font-weight:700;margin-left:6px">→ ${matched.length} zhoda</span>` : ''}
+      </td>
+      <td style="padding:8px 10px;white-space:nowrap;text-align:right">
+        <button class="act-btn" onclick="openVydNahladFromData(vydajkyList[${realIdx}])" style="color:#4f7cff;border-color:#4f7cff">👁 PDF</button>
+        <button class="act-btn" onclick="document.getElementById('zoznam-overlay').style.display='none';editVydajka(${realIdx})" style="color:#27ae60;border-color:#27ae60">✏️ Upraviť</button>
+        <button class="act-btn del" onclick="deleteVydajka(${realIdx})">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('zf-info').textContent = hasFilter
+    ? `Nájdené v ${shown} výdajkách`
+    : '';
 }
 
 function deleteVydajka(idx) {
   const v = vydajkyList[idx];
   if (!v) return;
-  if (!confirm('Vymazať výdajku ' + v.cislo + '?\nMnožstvá sa vrátia späť do skladu.')) return;
+  if (!confirm('Vymazať výdajku pre ' + v.iso + '?\nMnožstvá sa vrátia späť do skladu.')) return;
   (v.lines||[]).forEach(l => {
-    const found = items.findIndex(it => it.typ === l.typ && it.rozmer === l.rozmer && it.tavba === l.tavba);
+    const found = items.findIndex(it => it.typ===l.typ && it.rozmer===l.rozmer && it.tavba===l.tavba);
     if (found >= 0) {
-      const qty = parseFloat(l.vydQty) || 0;
-      items[found].zostatok = Math.round(((parseFloat(items[found].zostatok)||0) + qty) * 10000) / 10000;
+      items[found].zostatok = Math.round(((parseFloat(items[found].zostatok)||0) + (parseFloat(l.vydQty)||0)) * 10000) / 10000;
     }
   });
   vydajkyList.splice(idx, 1);
@@ -1573,7 +1715,7 @@ function deleteVydajka(idx) {
   localStorage.setItem('vydajky', JSON.stringify(vydajkyList));
   render();
   openVydajkyZoznam();
-  setStatus('Výdajka ' + v.cislo + ' vymazaná, množstvá vrátené do skladu.', 'ok');
+  setStatus('Výdajka vymazaná, množstvá vrátené do skladu.', 'ok');
 }
 
 // Event listenery pre modaly
