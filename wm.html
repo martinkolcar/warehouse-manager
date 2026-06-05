@@ -270,15 +270,15 @@ table.main td.center { text-align: center; }
   </div>
   <div style="flex:1"></div>
   <!-- Jazyky -->
-  <div style="display:flex;gap:2px;background:rgba(255,255,255,0.07);border-radius:7px;padding:3px;margin-right:10px">
-    <button onclick="setLang('sk')" id="hLangBtn_sk" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 4px;border-radius:4px;opacity:1" title="Slovenčina">🇸🇰</button>
-    <button onclick="setLang('en')" id="hLangBtn_en" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 4px;border-radius:4px;opacity:0.4" title="English">🇬🇧</button>
-    <button onclick="setLang('de')" id="hLangBtn_de" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 4px;border-radius:4px;opacity:0.4" title="Deutsch">🇩🇪</button>
-    <button onclick="setLang('uk')" id="hLangBtn_uk" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 4px;border-radius:4px;opacity:0.4" title="Українська">🇺🇦</button>
+  <div style="display:flex;gap:2px;background:rgba(255,255,255,0.12);border-radius:7px;padding:3px;margin-right:10px;border:1px solid rgba(255,255,255,0.15)">
+    <button onclick="setLang('sk')" id="hLangBtn_sk" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:4px;opacity:1" title="Slovenčina">🇸🇰</button>
+    <button onclick="setLang('en')" id="hLangBtn_en" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:4px;opacity:0.4" title="English">🇬🇧</button>
+    <button onclick="setLang('de')" id="hLangBtn_de" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:4px;opacity:0.4" title="Deutsch">🇩🇪</button>
+    <button onclick="setLang('uk')" id="hLangBtn_uk" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:4px;opacity:0.4" title="Українська">🇺🇦</button>
   </div>
   <!-- Online používatelia -->
   <div id="online-bar" style="display:none;align-items:center;gap:6px;margin-right:16px"></div>
-  <button class="btn" style="background:#4f7cff;color:#fff;font-size:13px;padding:9px 20px;border-radius:6px" onclick="openVydajkaWindow()">📋 Nová výdajka</button>
+  <button id="btn-nova-vydajka" class="btn" style="background:#4f7cff;color:#fff;font-size:13px;padding:9px 20px;border-radius:6px" onclick="openVydajkaWindow()">📋 Nová výdajka</button>
   <span id="sync-status" style="font-size:11px;margin-left:10px;color:#f59e0b">⏳ Pripájam...</span>
   <!-- User menu -->
   <div id="user-menu-wrap" style="display:none;margin-left:14px;position:relative">
@@ -299,25 +299,25 @@ table.main td.center { text-align: center; }
 <div class="toolbar">
   <!-- Import docx -->
   <div class="file-wrap">
-    <button class="btn btn-blue">📂 Nahrať dodací list (.docx)</button>
+    <button id="btn-import" class="btn btn-blue">📂 Nahrať dodací list (.docx)</button>
     <input type="file" accept=".docx" multiple onchange="importDocx(event)">
   </div>
-  <button class="btn btn-gray" onclick="openAddModal()">+ Pridať ručne</button>
-  <button class="btn btn-gray" onclick="exportCSV()">⬇ Export CSV</button>
-  <button class="btn btn-gray" onclick="openVydajkyZoznam()" style="background:#f0f4ff;border-color:#4f7cff;color:#4f7cff">📋 Výdajky</button>
+  <button id="btn-add" class="btn btn-gray" onclick="openAddModal()">+ Pridať ručne</button>
+  <button id="btn-csv" class="btn btn-gray" onclick="exportCSV()">⬇ Export CSV</button>
+  <button id="btn-vydajky" class="btn btn-gray" onclick="openVydajkyZoznam()" style="background:#f0f4ff;border-color:#4f7cff;color:#4f7cff">📋 Výdajky</button>
   <button id="migrate-btn" class="btn btn-gray" onclick="migrateToFirebase()" style="display:none;background:#fff7ed;border-color:#f59e0b;color:#b45309">☁ Preniesť do cloudu</button>
   <span style="flex:1"></span>
-  <button class="btn btn-red" onclick="clearAll()">🗑 Vymazať všetko</button>
+  <button id="btn-delete-all" class="btn btn-red" onclick="clearAll()">🗑 Vymazať všetko</button>
 </div>
 
 <div class="filters">
-  <label>Typ:</label>
+  <label id="lbl-typ">Typ:</label>
   <select id="f-typ" onchange="render()"><option value="">— všetky —</option></select>
-  <label>Rozmer:</label>
+  <label id="lbl-rozmer">Rozmer:</label>
   <select id="f-rozmer" onchange="render()"><option value="">— všetky —</option></select>
-  <label>Materiál:</label>
+  <label id="lbl-mat">Materiál:</label>
   <select id="f-mat" onchange="render()"><option value="">— všetky —</option></select>
-  <button class="btn btn-gray" onclick="clearFilters()">× Vyčistiť</button>
+  <button id="btn-clear-filter" class="btn btn-gray" onclick="clearFilters()">× Vyčistiť</button>
 </div>
 
 <div id="status-bar">
@@ -349,17 +349,17 @@ table.main td.center { text-align: center; }
     <thead>
       <tr>
         <th>#</th>
-        <th>Typ</th>
-        <th>Rozmer</th>
-        <th>Materiál</th>
-        <th>Norma</th>
-        <th>Zostatok</th>
-        <th>Jed.</th>
-        <th>Pozn.</th>
-        <th>Tavba</th>
-        <th>Dodací list</th>
-        <th>Dátum</th>
-        <th>Akcie</th>
+        <th id="th-colTyp">Typ</th>
+        <th id="th-colRozmer">Rozmer</th>
+        <th id="th-colMaterial">Materiál</th>
+        <th id="th-colNorma">Norma</th>
+        <th id="th-colZostatok">Zostatok</th>
+        <th id="th-colJed">Jed.</th>
+        <th id="th-colPozn">Pozn.</th>
+        <th id="th-colTavba">Tavba</th>
+        <th id="th-colDl">Dodací list</th>
+        <th id="th-colDatum">Dátum</th>
+        <th id="th-colAkcie">Akcie</th>
       </tr>
     </thead>
     <tbody id="main-tbody">
@@ -681,21 +681,44 @@ function parseHtml(html, filename) {
 
       if (!desc||!rozmer) continue;
 
-      // Vyčisti rozmer — vezmi prvú hodnotu
+      // Vyčisti rozmer
+      // "DN 50 x 60.3" → "60.3" (časť za posledným x)
+      // "26.7x2 26,9X2" → "26.7x2"
       rozmer = rozmer.split(/\s+/)[0].replace(',','.');
+      if (/^DN/i.test(rozmer)) {
+        const dnX = rozmer.match(/[xX]([\d\.]+)/);
+        rozmer = dnX ? dnX[1] : rozmer.replace(/^DN\s*/i,'').trim();
+      }
 
       // Qty — vyčisti ✓
       const qty = parseFloat((qtyRaw||'').replace(/[✓√\s]/g,'').replace(',','.')) || 0;
       if (qty===0) continue;
 
-      const tavba = (tavbaRaw||'').replace(/[✓√]/g,'').trim();
       const isPipe = desc.toLowerCase().includes('pipe');
       const matMatch = norma.match(/^([A-Z0-9][A-Za-z0-9]*)/);
       const material = matMatch ? matMatch[1] : (norma.split(',')[0]||'').trim();
 
-      // Multi-tavba split pre non-pipe: "S3805-21ks,1221261-83ks"
-      if (!isPipe && tavba && tavba.includes(',')) {
-        const segs = tavba.split(',').map(s=>s.trim()).filter(Boolean);
+      // Tavba — môže obsahovať dve tavby oddelené newline alebo lomkou
+      const tavbaClean = (tavbaRaw||'').replace(/[✓√]/g,'').trim();
+
+      // Non-pipe s dvoma tavbami cez newline → rozdeliť qty rovnomerne
+      if (!isPipe && tavbaClean.includes('\n')) {
+        const tavby = tavbaClean.split(/[\n\r]+/).map(t=>t.trim()).filter(Boolean);
+        // Skontroluj či má každá tavba -Xks suffix
+        const parsed = tavby.map(t=>{ const m=t.match(/^(.+?)-(\d+)\s*ks?$/i); return m?{tavba:m[1].trim(),qty:parseFloat(m[2])}:null; });
+        if (parsed.every(p=>p)) {
+          parsed.forEach(p=>result.push({typ:desc,rozmer,material,norma,jednotka:'ks',zostatok:p.qty,tavba:p.tavba,poznamka:'',zdroj_dl:dlCislo,datum:today}));
+        } else {
+          // Rozdeliť qty rovnomerne
+          const qtyEach = Math.round(qty / tavby.length * 10000) / 10000;
+          tavby.forEach(t=>result.push({typ:desc,rozmer,material,norma,jednotka:'ks',zostatok:qtyEach,tavba:t,poznamka:'',zdroj_dl:dlCislo,datum:today}));
+        }
+        continue;
+      }
+
+      // Non-pipe s dvoma tavbami cez čiarku: "S3805-21ks,1221261-83ks"
+      if (!isPipe && tavbaClean.includes(',')) {
+        const segs = tavbaClean.split(',').map(s=>s.trim()).filter(Boolean);
         const parsed = segs.map(s=>{ const m=s.match(/^(.+?)-?(\d+)\s*ks?$/i); return m?{tavba:m[1].trim(),qty:parseFloat(m[2])}:null; });
         if (parsed.every(p=>p)) {
           parsed.forEach(p=>result.push({typ:desc,rozmer,material,norma,jednotka:'ks',zostatok:p.qty,tavba:p.tavba,poznamka:'',zdroj_dl:dlCislo,datum:today}));
@@ -703,6 +726,7 @@ function parseHtml(html, filename) {
         }
       }
 
+      const tavba = tavbaClean;
       result.push({typ:desc,rozmer,material,norma,jednotka:isPipe?'m':'ks',zostatok:qty,tavba,poznamka:'',zdroj_dl:dlCislo,datum:today});
     }
   }
@@ -2173,30 +2197,85 @@ function addFromTavbaScanner(itemIdx) {
 <script>
 // ═══════════════════════════ JAZYKY ═══════════════════════════
 const LANGS = {
-  sk: { subtitle:'Prihlásenie do systému', name:'MENO', pass:'HESLO', login:'Prihlásiť sa', logging:'...', errWrong:'Nesprávne meno alebo heslo', errEmpty:'Zadajte meno a heslo', online:'online', admin:'Admin', logout:'Odhlásiť sa', switchProj:'Prepnúť projekt', projects:'Projekty', users:'Používatelia', newProj:'+ Nový projekt', projName:'Názov projektu', projDesc:'Popis (voliteľné)', create:'Vytvoriť', close:'Zavrieť', isos:'Izometrie', uploadPdf:'📄 Nahrať PDF izometrie', isoCount:'izometrií', noIsos:'Žiadne izometrie.', deleteProj:'Vymazať projekt' },
-  en: { subtitle:'Sign in to the system', name:'NAME', pass:'PASSWORD', login:'Sign in', logging:'...', errWrong:'Incorrect name or password', errEmpty:'Enter name and password', online:'online', admin:'Admin', logout:'Sign out', switchProj:'Switch project', projects:'Projects', users:'Users', newProj:'+ New project', projName:'Project name', projDesc:'Description (optional)', create:'Create', close:'Close', isos:'Isometries', uploadPdf:'📄 Upload PDF isometries', isoCount:'isometries', noIsos:'No isometries.', deleteProj:'Delete project' },
-  de: { subtitle:'Anmeldung am System', name:'NAME', pass:'PASSWORT', login:'Anmelden', logging:'...', errWrong:'Falscher Name oder Passwort', errEmpty:'Name und Passwort eingeben', online:'online', admin:'Admin', logout:'Abmelden', switchProj:'Projekt wechseln', projects:'Projekte', users:'Benutzer', newProj:'+ Neues Projekt', projName:'Projektname', projDesc:'Beschreibung (optional)', create:'Erstellen', close:'Schließen', isos:'Isometrien', uploadPdf:'📄 PDF-Isometrien hochladen', isoCount:'Isometrien', noIsos:'Keine Isometrien.', deleteProj:'Projekt löschen' },
-  uk: { subtitle:'Вхід до системи', name:'ІМЯ', pass:'ПАРОЛЬ', login:'Увійти', logging:'...', errWrong:'Невірне імя або пароль', errEmpty:'Введіть імя та пароль', online:'онлайн', admin:'Адмін', logout:'Вийти', switchProj:'Змінити проект', projects:'Проекти', users:'Користувачі', newProj:'+ Новий проект', projName:'Назва проекту', projDesc:'Опис', create:'Створити', close:'Закрити', isos:'Ізометрії', uploadPdf:'PDF ізометрії', isoCount:'ізометрій', noIsos:'Немає ізометрій.', deleteProj:'Видалити проект' }
+  sk: {
+    subtitle:'Prihlásenie do systému', name:'MENO', pass:'HESLO', login:'Prihlásiť sa', logging:'...', errWrong:'Nesprávne meno alebo heslo', errEmpty:'Zadajte meno a heslo',
+    logout:'Odhlásiť sa', switchProj:'Prepnúť projekt', projects:'Projekty', users:'Používatelia', newProj:'+ Nový projekt', projName:'Názov projektu', projDesc:'Popis (voliteľné)', create:'Vytvoriť', close:'Zavrieť', isos:'Izometrie', uploadPdf:'📄 Nahrať PDF izometrie', deleteProj:'Vymazať projekt',
+    importBtn:'📂 Nahrať dodací list (.docx)', addManual:'+ Pridať ručne', exportCsv:'⬇ Export CSV', vydajky:'📋 Výdajky', deleteAll:'🗑 Vymazať všetko', migrateBtn:'☁ Preniesť do cloudu',
+    typLabel:'Typ:', rozmerLabel:'Rozmer:', materialLabel:'Materiál:', clearFilter:'× Vyčistiť',
+    ready:'Pripravený. Nahrajte dodací list (.docx).', emptyWarehouse:'Sklad je prázdny. Nahrajte dodací list.', noResults:'Žiadne výsledky pre filter.',
+    colTyp:'TYP', colRozmer:'ROZMER', colMaterial:'MATERIÁL', colNorma:'NORMA', colZostatok:'ZOSTATOK', colJed:'JED.', colPozn:'POZN.', colTavba:'TAVBA', colDl:'DODACÍ LIST', colDatum:'DÁTUM', colAkcie:'AKCIE',
+    novaVydajka:'📋 Nová výdajka',
+    importPreview:'Skontrolujte a potvrďte.', merge:'Zlúčiť s existujúcimi', importBtn2:'✓ Importovať do skladu', cancelBtn:'Zrušiť'
+  },
+  en: {
+    subtitle:'Sign in to the system', name:'NAME', pass:'PASSWORD', login:'Sign in', logging:'...', errWrong:'Incorrect name or password', errEmpty:'Enter name and password',
+    logout:'Sign out', switchProj:'Switch project', projects:'Projects', users:'Users', newProj:'+ New project', projName:'Project name', projDesc:'Description (optional)', create:'Create', close:'Close', isos:'Isometries', uploadPdf:'📄 Upload PDF isometries', deleteProj:'Delete project',
+    importBtn:'📂 Upload delivery list (.docx)', addManual:'+ Add manually', exportCsv:'⬇ Export CSV', vydajky:'📋 Issue slips', deleteAll:'🗑 Delete all', migrateBtn:'☁ Migrate to cloud',
+    typLabel:'Type:', rozmerLabel:'Size:', materialLabel:'Material:', clearFilter:'× Clear',
+    ready:'Ready. Upload delivery list (.docx).', emptyWarehouse:'Warehouse is empty. Upload delivery list.', noResults:'No results for filter.',
+    colTyp:'TYPE', colRozmer:'SIZE', colMaterial:'MATERIAL', colNorma:'STANDARD', colZostatok:'STOCK', colJed:'UNIT', colPozn:'NOTE', colTavba:'HEAT NO.', colDl:'DELIVERY LIST', colDatum:'DATE', colAkcie:'ACTIONS',
+    novaVydajka:'📋 New issue slip',
+    importPreview:'Review and confirm.', merge:'Merge with existing', importBtn2:'✓ Import to warehouse', cancelBtn:'Cancel'
+  },
+  de: {
+    subtitle:'Anmeldung am System', name:'NAME', pass:'PASSWORT', login:'Anmelden', logging:'...', errWrong:'Falscher Name oder Passwort', errEmpty:'Name und Passwort eingeben',
+    logout:'Abmelden', switchProj:'Projekt wechseln', projects:'Projekte', users:'Benutzer', newProj:'+ Neues Projekt', projName:'Projektname', projDesc:'Beschreibung (optional)', create:'Erstellen', close:'Schließen', isos:'Isometrien', uploadPdf:'📄 PDF hochladen', deleteProj:'Projekt löschen',
+    importBtn:'📂 Lieferschein laden (.docx)', addManual:'+ Manuell hinzufügen', exportCsv:'⬇ CSV exportieren', vydajky:'📋 Ausgabescheine', deleteAll:'🗑 Alles löschen', migrateBtn:'☁ In Cloud übertragen',
+    typLabel:'Typ:', rozmerLabel:'Größe:', materialLabel:'Material:', clearFilter:'× Löschen',
+    ready:'Bereit. Lieferschein hochladen (.docx).', emptyWarehouse:'Lager ist leer. Lieferschein hochladen.', noResults:'Keine Ergebnisse für Filter.',
+    colTyp:'TYP', colRozmer:'GRÖßE', colMaterial:'MATERIAL', colNorma:'NORM', colZostatok:'BESTAND', colJed:'EINH.', colPozn:'NOTIZ', colTavba:'SCHMELZE', colDl:'LIEFERSCHEIN', colDatum:'DATUM', colAkcie:'AKTIONEN',
+    novaVydajka:'📋 Neuer Ausgabeschein',
+    importPreview:'Überprüfen und bestätigen.', merge:'Mit bestehenden zusammenführen', importBtn2:'✓ In Lager importieren', cancelBtn:'Abbrechen'
+  },
+  uk: {
+    subtitle:'Вхід до системи', name:'ІМЯ', pass:'ПАРОЛЬ', login:'Увійти', logging:'...', errWrong:'Невірне імя або пароль', errEmpty:'Введіть імя та пароль',
+    logout:'Вийти', switchProj:'Змінити проект', projects:'Проекти', users:'Користувачі', newProj:'+ Новий проект', projName:'Назва проекту', projDesc:'Опис', create:'Створити', close:'Закрити', isos:'Ізометрії', uploadPdf:'📄 PDF ізометрії', deleteProj:'Видалити проект',
+    importBtn:'📂 Завантажити накладну (.docx)', addManual:'+ Додати вручну', exportCsv:'⬇ Експорт CSV', vydajky:'📋 Видаткові', deleteAll:'🗑 Видалити все', migrateBtn:'☁ Перенести в хмару',
+    typLabel:'Тип:', rozmerLabel:'Розмір:', materialLabel:'Матеріал:', clearFilter:'× Очистити',
+    ready:'Готово. Завантажте накладну (.docx).', emptyWarehouse:'Склад порожній. Завантажте накладну.', noResults:'Немає результатів для фільтра.',
+    colTyp:'ТИП', colRozmer:'РОЗМІР', colMaterial:'МАТЕРІАЛ', colNorma:'НОРМА', colZostatok:'ЗАЛИШОК', colJed:'ОД.', colPozn:'ПРИМ.', colTavba:'ПЛАВКА', colDl:'НАКЛАДНА', colDatum:'ДАТА', colAkcie:'ДІЇ',
+    novaVydajka:'📋 Нова видаткова',
+    importPreview:'Перевірте та підтвердіть.', merge:'Обєднати з існуючими', importBtn2:'✓ Імпортувати на склад', cancelBtn:'Скасувати'
+  }
 };
 var _lang = localStorage.getItem('wmLang') || 'sk';
 function t(k){ return (LANGS[_lang]||LANGS.sk)[k]||k; }
 function setLang(l){
   _lang = l; localStorage.setItem('wmLang', l);
   ['sk','en','de','uk'].forEach(function(x){
-    // Login screen vlajky
     var b=document.getElementById('langBtn_'+x);
     if(b) b.style.opacity = x===l ? '1' : '0.4';
-    // Header vlajky
     var hb=document.getElementById('hLangBtn_'+x);
     if(hb) hb.style.opacity = x===l ? '1' : '0.4';
   });
-  applyLangLogin();
+  applyLang();
 }
 function applyLangLogin(){
   var s=document.getElementById('login-subtitle'); if(s) s.textContent=t('subtitle');
   var n=document.getElementById('login-label-name'); if(n) n.textContent=t('name');
   var p=document.getElementById('login-label-pass'); if(p) p.textContent=t('pass');
   var b=document.getElementById('login-btn-text'); if(b) b.textContent=t('login');
+}
+
+function applyLang() {
+  applyLangLogin();
+  // Toolbar
+  var el;
+  el=document.getElementById('btn-import');    if(el) el.textContent=t('importBtn');
+  el=document.getElementById('btn-add');       if(el) el.textContent=t('addManual');
+  el=document.getElementById('btn-csv');       if(el) el.textContent=t('exportCsv');
+  el=document.getElementById('btn-vydajky');   if(el) el.textContent=t('vydajky');
+  el=document.getElementById('btn-delete-all');if(el) el.textContent=t('deleteAll');
+  el=document.getElementById('migrate-btn');   if(el) el.textContent=t('migrateBtn');
+  el=document.getElementById('btn-nova-vydajka'); if(el) el.textContent=t('novaVydajka');
+  // Filtre
+  el=document.getElementById('lbl-typ');    if(el) el.textContent=t('typLabel');
+  el=document.getElementById('lbl-rozmer'); if(el) el.textContent=t('rozmerLabel');
+  el=document.getElementById('lbl-mat');    if(el) el.textContent=t('materialLabel');
+  el=document.getElementById('btn-clear-filter'); if(el) el.textContent=t('clearFilter');
+  // Hlavička tabuľky
+  var cols=['colTyp','colRozmer','colMaterial','colNorma','colZostatok','colJed','colPozn','colTavba','colDl','colDatum','colAkcie'];
+  cols.forEach(function(k){ var e=document.getElementById('th-'+k); if(e) e.textContent=t(k); });
 }
 
 
@@ -2456,7 +2535,7 @@ function closeProjectSwitch() {
 
 function selectProject(proj) {
   _currentProject = proj;
-  window._projectIsos = []; // reset izometrií
+  window._projectIsos = undefined; // reset — načíta sa pri prvom otvorení výdajky
   closeProjectSwitch();
   document.getElementById('project-badge').style.display = 'flex';
   document.getElementById('project-badge-name').textContent = proj.name;
