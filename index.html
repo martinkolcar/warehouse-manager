@@ -838,7 +838,8 @@ render();
       <h2>📋 Výdajka</h2>
       <span id="vyd-number" style="font-family:monospace;font-size:12px;color:#9a9bb0"></span>
       <div style="flex:1"></div>
-      <button class="btn" style="background:#27ae60;color:#fff;padding:6px 14px" onclick="openVydNahlad()">👁 Náhľad &amp; PDF</button>
+      <button class="btn" style="background:#6b7280;color:#fff;padding:6px 14px" onclick="openVydNahlad()">👁 Náhľad</button>
+      <button class="btn" style="background:#27ae60;color:#fff;padding:6px 14px;margin-left:6px" onclick="saveVydajka('pdf')">📄 Uložiť + PDF</button>
       <button class="btn" style="background:#4f7cff;color:#fff;padding:6px 14px;margin-left:6px" onclick="saveVydajka('save')">💾 Uložiť</button>
       <button class="btn btn-gray" style="margin-left:6px;padding:6px 14px" onclick="closeVydajka()">✕ Zavrieť</button>
     </div>
@@ -906,8 +907,9 @@ render();
           <div class="vyd-footer">
             <span style="font-size:12px;color:#666">Celkom položiek: <strong id="vyd-total-count">0</strong></span>
             <div style="flex:1"></div>
-            <button class="btn" style="background:#27ae60;color:#fff;padding:7px 18px" onclick="saveVydajka('pdf')">📄 PDF</button>
-            <button class="btn btn-gray" style="padding:7px 18px" onclick="saveVydajka('save')">💾 Uložiť</button>
+            <button class="btn" style="background:#6b7280;color:#fff;padding:7px 16px" onclick="openVydNahlad()">👁 Náhľad</button>
+            <button class="btn" style="background:#27ae60;color:#fff;padding:7px 16px" onclick="saveVydajka('pdf')">📄 Uložiť + PDF</button>
+            <button class="btn btn-gray" style="padding:7px 16px" onclick="saveVydajka('save')">💾 Uložiť</button>
           </div>
         </div>
       </div>
@@ -1075,13 +1077,17 @@ function addToVydajka(idx) {
   if (!vydIso) { alert('Najprv vyberte izometriu'); return; }
   const isPipe = (it.typ||'').toLowerCase().includes('pipe');
 
-  // Skontroluj či už je v riadkoch (ten istý materiál + tavba)
-  const existing = vydLines.findIndex(l => l.itemIdx === idx);
-  if (existing >= 0) {
-    // Zvýš qty
-    vydLines[existing].vydQty = (parseFloat(vydLines[existing].vydQty)||0) + 1;
-    renderVydLines();
-    return;
+  // Ak rovnaký materiál+tavba už je → iba zvýš qty (fittingy), rúry pridaj nový riadok
+  if (!isPipe) {
+    const existing = vydLines.findIndex(l => l.itemIdx === idx);
+    if (existing >= 0) {
+      vydLines[existing].vydQty = (parseFloat(vydLines[existing].vydQty)||0) + 1;
+      // Aktualizuj iba daný riadok bez rekreovania celého DOM
+      const inp = document.querySelector(`#vyd-lines-tbody tr[data-idx="${existing}"] .inp-qty`);
+      if (inp) inp.value = vydLines[existing].vydQty;
+      updateVydCount();
+      return;
+    }
   }
 
   vydLines.push({
@@ -1093,64 +1099,112 @@ function addToVydajka(idx) {
     tavba: it.tavba,
     jednotka: it.jednotka,
     stockMax: parseFloat(it.zostatok)||0,
-    vydQty: isPipe ? '' : 1,
-    dlzka: '',   // len pre rúry
-    spCislo: '', // len pre rúry
+    vydQty: isPipe ? 0 : 1,
+    dlzka: '',
+    spCislo: '',
     isPipe,
   });
 
-  document.getElementById('vyd-lines-panel').style.display = 'flex';
-  document.getElementById('vyd-lines-panel').style.flexDirection = 'column';
-  renderVydLines();
+  const panel = document.getElementById('vyd-lines-panel');
+  panel.style.display = 'flex';
+  panel.style.flexDirection = 'column';
+  // Pridaj iba nový riadok — neprekresluj celý tbody
+  appendVydRow(vydLines.length - 1);
+  updateVydCount();
+  updateHasPipeCols();
+}
+
+// Pridá jeden riadok do tabuľky bez rekreovania ostatných
+function appendVydRow(i) {
+  const tbody = document.getElementById('vyd-lines-tbody');
+  const l = vydLines[i];
+  const tr = buildVydRow(i, l);
+  tbody.appendChild(tr);
+}
+
+// Zostavenie jedného <tr> riadku — vracia DOM element
+function buildVydRow(i, l) {
+  const hasPipe = vydLines.some(x => x.isPipe);
+  const tr = document.createElement('tr');
+  tr.dataset.idx = i;
+
+  const badge = `<span class="badge badge-${typClass(l.typ)}">${shortType(l.typ)}</span>`;
+
+  let html = `
+    <td>${badge}<br><span style="font-size:10px;color:#555;word-break:break-word;max-width:130px;display:inline-block">${l.typ}</span></td>
+    <td style="font-family:monospace;font-weight:700">${l.rozmer}</td>
+    <td style="font-family:monospace;font-size:11px">${l.material||'—'}</td>
+    <td style="font-family:monospace;font-size:11px">${l.tavba||'—'}</td>
+    <td style="text-align:center;color:#888">—</td>`;
+
+  if (l.isPipe) {
+    // Rúry: inputy pre mm a SP, vydané sa vypočíta
+    html += `
+    <td id="vyd-vydane-${i}" style="text-align:center;color:#aaa;font-size:11px">—</td>
+    <td style="text-align:center">m</td>
+    <td><input class="vyd-inline-inp inp-dlzka" style="width:85px" type="number" min="0" step="1"
+         value="${l.dlzka||''}" placeholder="mm"
+         data-idx="${i}"
+         onchange="vydLines[this.dataset.idx].dlzka=this.value; updatePipeVydane(this.dataset.idx);"
+         ></td>
+    <td><input class="vyd-inline-inp inp-sp" style="width:75px" type="text"
+         value="${l.spCislo||''}" placeholder="SP-xxx"
+         data-idx="${i}"
+         onchange="vydLines[this.dataset.idx].spCislo=this.value;"
+         ></td>`;
+  } else {
+    // Fittingy: editovateľné qty
+    html += `
+    <td><input class="vyd-inline-inp inp-qty" style="width:65px" type="number" min="0" step="1"
+         value="${l.vydQty}" placeholder="0"
+         data-idx="${i}"
+         onchange="vydLines[this.dataset.idx].vydQty=parseFloat(this.value)||0; updateRowColor(this.dataset.idx);"
+         ></td>
+    <td style="text-align:center">ks</td>`;
+    if (vydLines.some(x => x.isPipe)) {
+      html += `<td>—</td><td>—</td>`;
+    }
+  }
+
+  html += `<td><button class="act-btn del" data-idx="${i}" onclick="removeVydLine(this.dataset.idx)">✕</button></td>`;
+  tr.innerHTML = html;
+  return tr;
+}
+
+function updatePipeVydane(i) {
+  const l = vydLines[i];
+  const mm = parseFloat(l.dlzka) || 0;
+  const m = mm / 1000;
+  const over = m > l.stockMax;
+  const el = document.getElementById('vyd-vydane-' + i);
+  if (el) {
+    el.innerHTML = `<span style="font-weight:700;color:${over?'#dc2626':'#16a34a'}">${m.toFixed(3)} m</span><br><span style="font-size:10px;color:#aaa">(${mm} mm)</span>`;
+  }
+}
+
+function updateRowColor(i) {
+  const l = vydLines[i];
+  const tr = document.querySelector(`#vyd-lines-tbody tr[data-idx="${i}"]`);
+  if (!tr) return;
+  const qty = parseFloat(l.vydQty) || 0;
+  tr.style.background = qty > l.stockMax ? '#fff5f5' : '';
+}
+
+function updateHasPipeCols() {
+  const hasPipe = vydLines.some(l => l.isPipe);
+  document.getElementById('vyd-th-dlzka').style.display = hasPipe ? '' : 'none';
+  document.getElementById('vyd-th-sp').style.display    = hasPipe ? '' : 'none';
 }
 
 function renderVydLines() {
+  // Kompletný prerender — používa sa iba pri otvorení existujúcej výdajky
   const tbody = document.getElementById('vyd-lines-tbody');
-  const hasPipe = vydLines.some(l => l.isPipe);
-  document.getElementById('vyd-th-dlzka').style.display = hasPipe ? '' : 'none';
-  document.getElementById('vyd-th-sp').style.display = hasPipe ? '' : 'none';
-
-  tbody.innerHTML = vydLines.map((l, i) => {
-    const badge = `<span class="badge badge-${typClass(l.typ)}">${shortType(l.typ)}</span>`;
-    // Pre rúry: vydané = dlzka/1000 m; pre fittingy: vydané = vydQty ks
-    const vydane = l.isPipe
-      ? (parseFloat(l.dlzka)||0) / 1000
-      : (parseFloat(l.vydQty)||0);
-    const overMax = vydane > l.stockMax;
-    const qClass = overMax ? 'qty-zero' : 'qty-ok';
-
-    // Stĺpec "Vydané" — pre rúry vypočítaný z mm, pre fittingy editovateľný
-    const vydCell = l.isPipe
-      ? `<td style="text-align:center"><span class="${qClass}" style="font-weight:700">${vydane.toFixed(3)} m</span><br><span style="font-size:10px;color:#aaa">(z ${l.dlzka||0} mm)</span></td>`
-      : `<td><input class="vyd-inline-inp" style="width:65px" type="number" min="0" step="1"
-            value="${l.vydQty}" placeholder="0"
-            oninput="vydLines[${i}].vydQty=parseFloat(this.value)||0;renderVydLines()"></td>`;
-
-    const pipeExtra = hasPipe
-      ? `<td>${l.isPipe
-          ? `<input class="vyd-inline-inp" style="width:80px" value="${l.dlzka||''}" placeholder="napr. 3200"
-               oninput="vydLines[${i}].dlzka=this.value;renderVydLines()">`
-          : '—'}</td>
-         <td>${l.isPipe
-          ? `<input class="vyd-inline-inp" style="width:75px" value="${l.spCislo||''}" placeholder="SP-xxx"
-               oninput="vydLines[${i}].spCislo=this.value">`
-          : '—'}</td>`
-      : '';
-
-    return `<tr${overMax ? ' style="background:#fff5f5"' : ''}>
-      <td>${badge}<br><span style="font-size:10px;color:#555">${l.typ}</span></td>
-      <td style="font-family:monospace;font-weight:700">${l.rozmer}</td>
-      <td style="font-family:monospace;font-size:11px">${l.material||'—'}</td>
-      <td style="font-family:monospace;font-size:11px">${l.tavba||'—'}</td>
-      <td style="text-align:center;color:#888">—</td>
-      ${vydCell}
-      <td style="text-align:center">${l.jednotka}</td>
-      ${pipeExtra}
-      <td><button class="act-btn del" onclick="removeVydLine(${i})">✕</button></td>
-    </tr>`;
-  }).join('');
-
+  tbody.innerHTML = '';
+  vydLines.forEach((l, i) => tbody.appendChild(buildVydRow(i, l)));
   updateVydCount();
+  updateHasPipeCols();
+  // Obnov vypočítané hodnoty pre rúry
+  vydLines.forEach((l, i) => { if (l.isPipe && l.dlzka) updatePipeVydane(i); });
 }
 
 function updateVydCount() {
@@ -1160,19 +1214,25 @@ function updateVydCount() {
 }
 
 function removeVydLine(i) {
+  i = parseInt(i);
   vydLines.splice(i, 1);
-  if (!vydLines.length) document.getElementById('vyd-lines-panel').style.display = 'none';
-  else renderVydLines();
+  if (!vydLines.length) {
+    document.getElementById('vyd-lines-panel').style.display = 'none';
+  }
+  // Prerender celého zoznamu (riadky sa musia renumbrovať)
+  renderVydLines();
 }
 
 function clearVydLines() {
   if (!vydLines.length) return;
   if (!confirm('Vymazať všetky riadky?')) return;
   vydLines = [];
+  document.getElementById('vyd-lines-tbody').innerHTML = '';
   document.getElementById('vyd-lines-panel').style.display = 'none';
+  updateVydCount();
 }
 
-// ─── ULOŽIŤ / PDF VÝDAJKY ─────────────────────
+// ─── ULOŽIŤ / NÁHĽAD — výdajka ostáva otvorená ─────────────────────
 function saveVydajka(mode) {
   if (!vydIso) { alert('Vyberte izometriu'); return; }
   if (!vydLines.length) { alert('Výdajka je prázdna'); return; }
@@ -1180,195 +1240,92 @@ function saveVydajka(mode) {
   const cislo = document.getElementById('vyd-number').textContent;
   const datum = new Date().toISOString().split('T')[0];
 
+  if (mode === 'nahlad') {
+    // Iba náhľad — neukladá, neodčítava sklad
+    const v = buildVydajkaObj(cislo, datum);
+    openVydNahladFromData(v);
+    return;
+  }
+
   // Odpočítaj zo skladu — rúry: mm ÷ 1000 → metre
   vydLines.forEach(l => {
-    if (l.itemIdx === undefined) return;
+    if (l.itemIdx === undefined || l.itemIdx === null) return;
     const vydane = l.isPipe
       ? (parseFloat(l.dlzka) || 0) / 1000   // mm → m
-      : (parseFloat(l.vydQty) || 0);          // ks
-    if (vydane > 0) {
+      : (parseFloat(l.vydQty) || 0);         // ks
+    if (vydane > 0 && items[l.itemIdx]) {
       const cur = parseFloat(items[l.itemIdx].zostatok) || 0;
       items[l.itemIdx].zostatok = Math.round((cur - vydane) * 10000) / 10000;
     }
   });
 
-  // Ulož výdajku
-  const vydajka = {
-    cislo, iso: vydIso, sec: vydIsoSec, datum,
-    vytvoril: '', // bude doplnené pri PDF
-    lines: vydLines.map(l => ({
-      typ: l.typ, rozmer: l.rozmer, material: l.material,
-      norma: l.norma, tavba: l.tavba, jednotka: l.jednotka,
-      isPipe: l.isPipe || false,
-      vydQty: l.isPipe ? (parseFloat(l.dlzka)||0)/1000 : (parseFloat(l.vydQty)||0),
-      dlzka: l.dlzka || '',
-      spCislo: l.spCislo || ''
-    }))
-  };
+  const vydajka = buildVydajkaObj(cislo, datum);
   vydajkyList.push(vydajka);
   save();
   localStorage.setItem('vydajky', JSON.stringify(vydajkyList));
   render();
 
-  if (mode === 'pdf') exportVydajkaPdf(vydajka);
-  if (mode === 'save') {
-    setStatus(`✓ Výdajka ${cislo} uložená (${vydLines.length} položiek, izometria: ${vydIso})`, 'ok');
-    document.getElementById('vyd-overlay').classList.remove('open');
+  if (mode === 'pdf') {
+    openVydNahladFromData(vydajka);
   }
+
+  // Výdajka zostáva otvorená — vymazať riadky a pripraviť novú
+  vydLines = [];
+  document.getElementById('vyd-lines-tbody').innerHTML = '';
+  document.getElementById('vyd-lines-panel').style.display = 'none';
+  updateVydCount();
+  // Vygeneruj nové číslo pre prípadnú ďalšiu výdajku
+  document.getElementById('vyd-number').textContent = genVydNumber();
+
+  setStatus(`✓ Výdajka ${cislo} uložená (${vydajka.lines.length} položiek, izometria: ${vydIso})`, 'ok');
 }
 
-// ─── NÁHĽAD VÝDAJKY (modálne okno) ───────────
+function buildVydajkaObj(cislo, datum) {
+  return {
+    cislo,
+    iso: vydIso,
+    sec: vydIsoSec,
+    datum,
+    lines: vydLines.map(l => ({
+      typ:       l.typ,
+      rozmer:    l.rozmer,
+      material:  l.material,
+      norma:     l.norma,
+      tavba:     l.tavba,
+      jednotka:  l.jednotka,
+      isPipe:    l.isPipe || false,
+      vydQty:    l.isPipe
+                   ? Math.round((parseFloat(l.dlzka)||0) / 1000 * 10000) / 10000
+                   : (parseFloat(l.vydQty)||0),
+      dlzka:     l.dlzka  || '',
+      spCislo:   l.spCislo || ''
+    }))
+  };
+}
+
+// ─── NÁHĽAD VÝDAJKY ───────────────────────────
 function openVydNahlad() {
   if (!vydIso) { alert('Vyberte izometriu'); return; }
   if (!vydLines.length) { alert('Výdajka je prázdna'); return; }
-
+  // Synchronizuj hodnoty z DOM inputov (pre prípad že onchange ešte nebol)
+  document.querySelectorAll('#vyd-lines-tbody .inp-qty').forEach(inp => {
+    const i = parseInt(inp.dataset.idx);
+    if (!isNaN(i) && vydLines[i]) vydLines[i].vydQty = parseFloat(inp.value)||0;
+  });
+  document.querySelectorAll('#vyd-lines-tbody .inp-dlzka').forEach(inp => {
+    const i = parseInt(inp.dataset.idx);
+    if (!isNaN(i) && vydLines[i]) vydLines[i].dlzka = inp.value;
+  });
+  document.querySelectorAll('#vyd-lines-tbody .inp-sp').forEach(inp => {
+    const i = parseInt(inp.dataset.idx);
+    if (!isNaN(i) && vydLines[i]) vydLines[i].spCislo = inp.value;
+  });
   const cislo = document.getElementById('vyd-number').textContent;
   const datum = new Date().toISOString().split('T')[0];
-  const hasPipe = vydLines.some(l => l.isPipe);
-
-  // Zostavenie riadkov tabuľky — rovnaký formát ako vzorový Excel
-  let pos = 1;
-  const rows = vydLines.map(l => {
-    const vydane = l.isPipe
-      ? ((parseFloat(l.dlzka)||0) / 1000).toFixed(3)
-      : (parseFloat(l.vydQty)||0);
-    const spCell  = l.isPipe ? (l.spCislo || '') : '';
-    const mmCell  = l.isPipe ? (l.dlzka   || '') : '';
-    return `<tr>
-      <td class="c"></td>
-      <td class="c">${pos++}</td>
-      <td>${l.typ}</td>
-      <td>${l.norma||''}</td>
-      <td class="mono">${l.rozmer}${mmCell ? '<br><span style="color:#888;font-size:9px">'+mmCell+' mm</span>' : ''}</td>
-      <td class="mono">${l.material||''}</td>
-      <td class="c">—</td>
-      <td class="c bold">${vydane}</td>
-      <td class="c">${datum}</td>
-      <td></td>
-      <td class="mono">${l.tavba||''}</td>
-      ${hasPipe ? `<td class="c">${spCell}</td>` : ''}
-    </tr>`;
-  }).join('');
-
-  const thPipe = hasPipe ? '<th>SP No.</th>' : '';
-
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>${cislo}</title>
-<style>
-  @page { size: A4 landscape; margin: 10mm 12mm; }
-  * { box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; font-size: 10px; background: #fff; margin: 0; padding: 0; }
-  .page { width: 100%; padding: 4px; }
-
-  /* Hlavička dokumentu */
-  .doc-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 6px; border-bottom: 2px solid #1a1a2e; padding-bottom: 6px; }
-  .doc-title { font-size: 14px; font-weight: 700; letter-spacing: 0.04em; color: #1a1a2e; }
-  .doc-sub { font-size: 9px; color: #666; margin-top: 2px; }
-  .doc-meta { text-align: right; font-size: 9px; color: #444; line-height: 1.7; }
-  .doc-meta strong { color: #1a1a2e; }
-
-  /* Nadpis sekcie */
-  .section-bar {
-    background: #1a1a2e; color: #fff; font-size: 10px; font-weight: 700;
-    letter-spacing: 0.08em; padding: 4px 8px; margin-bottom: 0;
-    text-transform: uppercase;
-  }
-
-  /* Tabuľka */
-  table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
-  thead th {
-    background: #2c3e6b; color: #e0e8ff;
-    padding: 5px 6px; text-align: left;
-    font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.05em;
-    border: 1px solid #1a1a2e; white-space: nowrap;
-  }
-  td { padding: 4px 6px; border: 1px solid #d0d4dc; vertical-align: middle; }
-  tbody tr:nth-child(even) td { background: #f4f6fb; }
-  tbody tr:hover td { background: #e8eeff; }
-  td.c { text-align: center; }
-  td.mono { font-family: 'Courier New', monospace; font-size: 9px; }
-  td.bold { font-weight: 700; font-size: 11px; }
-
-  /* Footer */
-  .doc-footer { margin-top: 10px; display: flex; gap: 30px; font-size: 9px; color: #666; border-top: 1px solid #ccc; padding-top: 6px; }
-  .sign-box { flex: 1; }
-  .sign-line { border-bottom: 1px solid #999; height: 24px; margin-bottom: 3px; }
-
-  /* Print tlačidlo - skryté pri tlači */
-  .print-bar { background: #1a1a2e; padding: 10px 16px; display: flex; align-items: center; gap: 10px; }
-  .print-bar button { padding: 8px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 13px; font-weight: 700; }
-  .btn-print { background: #27ae60; color: #fff; }
-  .btn-close { background: #e4e8ef; color: #333; }
-  @media print {
-    .print-bar { display: none !important; }
-    body { font-size: 9px; }
-  }
-</style>
-</head>
-<body>
-<div class="print-bar">
-  <span style="color:#fff;font-weight:700;font-size:14px">📋 ${cislo}</span>
-  <span style="color:#9a9bb0;font-size:12px">· ${vydIso}</span>
-  <div style="flex:1"></div>
-  <button class="btn-print" onclick="window.print()">🖨️ Tlačiť / Uložiť PDF</button>
-  <button class="btn-close" onclick="window.close()">✕ Zavrieť</button>
-</div>
-<div class="page">
-  <div class="doc-header">
-    <div>
-      <div class="doc-title">FABRICATION MATERIALS ISSUE SLIP</div>
-      <div class="doc-sub">PMP Montex s.r.o. &nbsp;·&nbsp; Výdajka materiálu z výrobného skladu</div>
-    </div>
-    <div class="doc-meta">
-      <strong>Číslo výdajky:</strong> ${cislo}<br>
-      <strong>Izometria:</strong> ${vydIso}<br>
-      <strong>Sekcia:</strong> ${vydIsoSec||'—'}<br>
-      <strong>Dátum:</strong> ${datum}
-    </div>
-  </div>
-
-  <div class="section-bar">FABRICATION MATERIALS</div>
-  <table>
-    <thead>
-      <tr>
-        <th style="width:22px">Page</th>
-        <th style="width:28px">Pos.</th>
-        <th style="min-width:140px">Part Description</th>
-        <th style="min-width:120px">Standard</th>
-        <th style="min-width:90px">Dimensions</th>
-        <th style="width:70px">Material</th>
-        <th style="width:55px">QTY Izom.</th>
-        <th style="width:60px">Issued QTY</th>
-        <th style="width:65px">Date</th>
-        <th style="width:60px">Name</th>
-        <th style="min-width:80px">Heat Number</th>
-        ${thPipe}
-      </tr>
-    </thead>
-    <tbody>
-      ${rows}
-    </tbody>
-  </table>
-
-  <div class="doc-footer">
-    <div class="sign-box"><div class="sign-line"></div>Vydal / Issued by</div>
-    <div class="sign-box"><div class="sign-line"></div>Prevzal / Received by</div>
-    <div class="sign-box"><div class="sign-line"></div>Dátum prevzatia / Date received</div>
-    <div style="flex:2;text-align:right;color:#bbb;font-size:8px">
-      Generované: ${new Date().toLocaleString('sk-SK')} &nbsp;·&nbsp; SkaldManager v0.2 · PMP Montex
-    </div>
-  </div>
-</div>
-</body></html>`;
-
-  // Otvor v novom okne (landscape)
-  const win = window.open('', '_blank', 'width=1100,height=700,scrollbars=yes');
-  win.document.write(html);
-  win.document.close();
+  openVydNahladFromData(buildVydajkaObj(cislo, datum));
 }
 
 function exportVydajkaPdf(v) {
-  // Zostatok pre kompatibilitu — otvor náhľad z uloženej výdajky
   openVydNahladFromData(v);
 }
 
