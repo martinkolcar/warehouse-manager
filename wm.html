@@ -701,39 +701,37 @@ function parseHtml(html, filename) {
       if (qty===0) continue;
 
       const isPipe = desc.toLowerCase().includes('pipe');
-      const matMatch = norma.match(/^([A-Z0-9][A-Za-z0-9]*)/);
-      const material = matMatch ? matMatch[1] : (norma.split(',')[0]||'').trim();
 
-      // Tavba — môže obsahovať dve tavby oddelené newline alebo lomkou
+      // Materiál = prvý token pred čiarkou (napr. "1.4307" alebo "P235GH")
+      // Norma ostáva celá
+      const material = (norma.split(',')[0]||'').trim();
+
+      // ── Multi-tavba split ──────────────────────────────────────
       const tavbaClean = (tavbaRaw||'').replace(/[✓√]/g,'').trim();
 
-      // Non-pipe s dvoma tavbami cez newline → rozdeliť qty rovnomerne
-      if (!isPipe && tavbaClean.includes('\n')) {
-        const tavby = tavbaClean.split(/[\n\r]+/).map(t=>t.trim()).filter(Boolean);
-        // Skontroluj či má každá tavba -Xks suffix
-        const parsed = tavby.map(t=>{ const m=t.match(/^(.+?)-(\d+)\s*ks?$/i); return m?{tavba:m[1].trim(),qty:parseFloat(m[2])}:null; });
-        if (parsed.every(p=>p)) {
-          parsed.forEach(p=>result.push({typ:desc,rozmer,material,norma,jednotka:'ks',zostatok:p.qty,tavba:p.tavba,poznamka:'',zdroj_dl:dlCislo,datum:today}));
-        } else {
-          // Rozdeliť qty rovnomerne
-          const qtyEach = Math.round(qty / tavby.length * 10000) / 10000;
-          tavby.forEach(t=>result.push({typ:desc,rozmer,material,norma,jednotka:'ks',zostatok:qtyEach,tavba:t,poznamka:'',zdroj_dl:dlCislo,datum:today}));
+      if (!isPipe && tavbaClean && (tavbaClean.includes('\n') || tavbaClean.includes(','))) {
+        // Rozdeľ na segmenty
+        const segs = tavbaClean.split(/[\n\r,]+/).map(s=>s.trim()).filter(Boolean);
+
+        // Skús formát "tavba-Nks" alebo "tavba-Nx" (kde N = počet)
+        const withQty = segs.map(s => {
+          const m = s.match(/^(.+?)[-\s]+(\d+)\s*(?:ks|x|pcs)?$/i);
+          return m ? { tavba: m[1].trim(), qty: parseFloat(m[2]) } : null;
+        });
+
+        if (withQty.every(p => p)) {
+          // Každý segment má svoju qty
+          withQty.forEach(p => result.push({typ:desc,rozmer,material,norma,jednotka:'ks',zostatok:p.qty,tavba:p.tavba,poznamka:'',zdroj_dl:dlCislo,datum:today}));
+          continue;
         }
+
+        // Bez qty — rozdeliť rovnomerne
+        const qtyEach = Math.round(qty / segs.length * 100) / 100;
+        segs.forEach(s => result.push({typ:desc,rozmer,material,norma,jednotka:'ks',zostatok:qtyEach,tavba:s,poznamka:'',zdroj_dl:dlCislo,datum:today}));
         continue;
       }
 
-      // Non-pipe s dvoma tavbami cez čiarku: "S3805-21ks,1221261-83ks"
-      if (!isPipe && tavbaClean.includes(',')) {
-        const segs = tavbaClean.split(',').map(s=>s.trim()).filter(Boolean);
-        const parsed = segs.map(s=>{ const m=s.match(/^(.+?)-?(\d+)\s*ks?$/i); return m?{tavba:m[1].trim(),qty:parseFloat(m[2])}:null; });
-        if (parsed.every(p=>p)) {
-          parsed.forEach(p=>result.push({typ:desc,rozmer,material,norma,jednotka:'ks',zostatok:p.qty,tavba:p.tavba,poznamka:'',zdroj_dl:dlCislo,datum:today}));
-          continue;
-        }
-      }
-
-      const tavba = tavbaClean;
-      result.push({typ:desc,rozmer,material,norma,jednotka:isPipe?'m':'ks',zostatok:qty,tavba,poznamka:'',zdroj_dl:dlCislo,datum:today});
+      result.push({typ:desc,rozmer,material,norma,jednotka:isPipe?'m':'ks',zostatok:qty,tavba:tavbaClean,poznamka:'',zdroj_dl:dlCislo,datum:today});
     }
   }
   return result;
