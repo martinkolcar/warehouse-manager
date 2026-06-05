@@ -710,25 +710,36 @@ function parseHtml(html, filename) {
       const tavbaClean = (tavbaRaw||'').replace(/[✓√]/g,'').trim();
 
       if (!isPipe && tavbaClean && (tavbaClean.includes('\n') || tavbaClean.includes(','))) {
-        // Rozdeľ na segmenty
+        // Rozdeľ na segmenty — čiarka alebo newline
         const segs = tavbaClean.split(/[\n\r,]+/).map(s=>s.trim()).filter(Boolean);
 
-        // Skús formát "tavba-Nks" alebo "tavba-Nx" (kde N = počet)
+        // Formát "tavba-Nks" alebo "tavba-N" kde N = číslo (celkový počet v sklade)
+        // napr. "185003-48KS" = tavba 185003, 48 ks celkovo
+        // napr. "180668-32" = tavba 180668, 32 ks
+        // napr. "-32" = zvyšok predošlej tavby — preskočiť
         const withQty = segs.map(s => {
-          const m = s.match(/^(.+?)[-\s]+(\d+)\s*(?:ks|x|pcs)?$/i);
-          return m ? { tavba: m[1].trim(), qty: parseFloat(m[2]) } : null;
-        });
+          if (!s || s.match(/^[-\s]+$/)) return null; // prázdny alebo len "-"
+          // Skús "tavba-Nks" alebo "tavba-N"
+          const m = s.match(/^([A-Za-z0-9\/\.]+(?:[-\/][A-Za-z0-9]+)*?)[-\s]+(\d+)\s*(?:ks|x|pcs)?$/i);
+          if (m) return { tavba: m[1].trim(), qty: parseFloat(m[2]) };
+          // Bez čísla — táto tavba bez qty
+          const clean = s.replace(/[-\s]+$/, '').trim();
+          return clean ? { tavba: clean, qty: null } : null;
+        }).filter(Boolean);
 
-        if (withQty.every(p => p)) {
-          // Každý segment má svoju qty
+        if (withQty.length && withQty.every(p => p.qty !== null)) {
+          // Každý segment má svoju qty — použiť priamo
           withQty.forEach(p => result.push({typ:desc,rozmer,material,norma,jednotka:'ks',zostatok:p.qty,tavba:p.tavba,poznamka:'',zdroj_dl:dlCislo,datum:today}));
           continue;
         }
 
-        // Bez qty — rozdeliť rovnomerne
-        const qtyEach = Math.round(qty / segs.length * 100) / 100;
-        segs.forEach(s => result.push({typ:desc,rozmer,material,norma,jednotka:'ks',zostatok:qtyEach,tavba:s,poznamka:'',zdroj_dl:dlCislo,datum:today}));
-        continue;
+        // Niektoré segmenty nemajú qty — rozdeliť celkové qty rovnomerne
+        const validSegs = withQty.filter(p => p.tavba);
+        if (validSegs.length > 0) {
+          const qtyEach = Math.round(qty / validSegs.length * 100) / 100;
+          validSegs.forEach(p => result.push({typ:desc,rozmer,material,norma,jednotka:'ks',zostatok:p.qty||qtyEach,tavba:p.tavba,poznamka:'',zdroj_dl:dlCislo,datum:today}));
+          continue;
+        }
       }
 
       result.push({typ:desc,rozmer,material,norma,jednotka:isPipe?'m':'ks',zostatok:qty,tavba:tavbaClean,poznamka:'',zdroj_dl:dlCislo,datum:today});
