@@ -1601,7 +1601,6 @@ function exportVydajkaPdf(v) {
 }
 
 function openVydNahladFromData(v) {
-  // Rovnaký render ako openVydNahlad ale z uložených dát
   const hasPipe = v.lines.some(l => l.isPipe);
   let pos = 1;
   const rows = v.lines.map(l => {
@@ -1628,9 +1627,32 @@ function openVydNahladFromData(v) {
 
   const thPipe = hasPipe ? '<th>SP No.</th>' : '';
   const html = buildVydPdfHtml(v.cislo, v.iso, v.sec||'', v.datum, rows, thPipe);
-  const win = window.open('', '_blank', 'width=1100,height=700,scrollbars=yes');
-  win.document.write(html);
-  win.document.close();
+
+  // Zobraz v internom fullscreen modáli
+  var overlay = document.getElementById('nahlad-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'nahlad-overlay';
+    overlay.style.cssText = 'display:none;position:fixed;inset:0;background:#1a1a2e;z-index:8000;flex-direction:column';
+    overlay.innerHTML =
+      '<div style="background:#1a1a2e;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0">' +
+        '<span id="nahlad-title" style="color:#fff;font-weight:700;font-size:14px"></span>' +
+        '<div style="flex:1"></div>' +
+        '<button onclick="document.getElementById(\'nahlad-iframe\').contentWindow.print()" style="padding:8px 20px;background:#27ae60;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;font-weight:700">🖨️ Tlačiť / PDF</button>' +
+        '<button onclick="document.getElementById(\'nahlad-overlay\').style.display=\'none\'" style="padding:8px 16px;background:#374151;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;margin-left:8px">✕ Zavrieť</button>' +
+      '</div>' +
+      '<iframe id="nahlad-iframe" style="flex:1;border:none;background:#fff;width:100%"></iframe>';
+    document.body.appendChild(overlay);
+  }
+
+  document.getElementById('nahlad-title').textContent = '📋 ' + (v.cislo||'') + ' · ' + (v.iso||'');
+  overlay.style.display = 'flex';
+
+  // Zapíš HTML do iframe
+  const iframe = document.getElementById('nahlad-iframe');
+  iframe.onload = null;
+  // Použi srcdoc pre moderné prehliadače
+  iframe.srcdoc = html;
 }
 
 function buildVydPdfHtml(cislo, iso, sec, datum, rows, thPipe) {
@@ -1639,74 +1661,61 @@ function buildVydPdfHtml(cislo, iso, sec, datum, rows, thPipe) {
 <style>
   @page { size: A4 landscape; margin: 10mm 12mm; }
   * { box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; font-size: 10px; background: #fff; margin: 0; padding: 0; }
-  .page { width: 100%; padding: 4px; }
-  .doc-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 6px; border-bottom: 2px solid #1a1a2e; padding-bottom: 6px; }
-  .doc-title { font-size: 14px; font-weight: 700; letter-spacing: 0.04em; color: #1a1a2e; }
-  .doc-sub { font-size: 9px; color: #666; margin-top: 2px; }
-  .doc-meta { text-align: right; font-size: 9px; color: #444; line-height: 1.7; }
+  body { font-family: Arial, sans-serif; font-size: 11px; background: #fff; margin: 0; padding: 12px 16px; }
+  .doc-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; border-bottom: 2px solid #1a1a2e; padding-bottom: 8px; }
+  .doc-title { font-size: 16px; font-weight: 700; letter-spacing: 0.04em; color: #1a1a2e; }
+  .doc-sub { font-size: 11px; color: #666; margin-top: 3px; }
+  .doc-meta { text-align: right; font-size: 11px; color: #444; line-height: 1.8; }
   .doc-meta strong { color: #1a1a2e; }
-  .section-bar { background: #1a1a2e; color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; padding: 4px 8px; text-transform: uppercase; }
-  table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
-  thead th { background: #2c3e6b; color: #e0e8ff; padding: 5px 6px; text-align: left; font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid #1a1a2e; white-space: nowrap; }
-  td { padding: 4px 6px; border: 1px solid #d0d4dc; vertical-align: middle; }
+  .section-bar { background: #1a1a2e; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 5px 10px; text-transform: uppercase; margin-bottom: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  thead th { background: #2c3e6b; color: #e0e8ff; padding: 6px 8px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid #1a1a2e; white-space: nowrap; }
+  td { padding: 5px 8px; border: 1px solid #d0d4dc; vertical-align: middle; }
   tbody tr:nth-child(even) td { background: #f4f6fb; }
+  tbody tr:hover td { background: #eef2ff; }
   td.c { text-align: center; }
-  td.mono { font-family: 'Courier New', monospace; font-size: 9px; }
-  td.bold { font-weight: 700; font-size: 11px; }
-  .doc-footer { margin-top: 10px; display: flex; gap: 30px; font-size: 9px; color: #666; border-top: 1px solid #ccc; padding-top: 6px; }
+  td.mono { font-family: 'Courier New', monospace; font-size: 10px; }
+  td.bold { font-weight: 700; font-size: 12px; }
+  .doc-footer { margin-top: 16px; display: flex; gap: 30px; font-size: 10px; color: #666; border-top: 1px solid #ccc; padding-top: 8px; }
   .sign-box { flex: 1; }
-  .sign-line { border-bottom: 1px solid #999; height: 24px; margin-bottom: 3px; }
-  .print-bar { background: #1a1a2e; padding: 10px 16px; display: flex; align-items: center; gap: 10px; }
-  .print-bar button { padding: 8px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 13px; font-weight: 700; }
-  .btn-print { background: #27ae60; color: #fff; }
-  .btn-close { background: #e4e8ef; color: #333; }
-  @media print { .print-bar { display: none !important; } }
+  .sign-line { border-bottom: 1px solid #999; height: 28px; margin-bottom: 4px; }
+  @media print { body { padding: 0; } }
 </style></head><body>
-<div class="print-bar">
-  <span style="color:#fff;font-weight:700;font-size:14px">📋 ${cislo}</span>
-  <span style="color:#9a9bb0;font-size:12px">· ${iso}</span>
-  <div style="flex:1"></div>
-  <button class="btn-print" onclick="window.print()">🖨️ Tlačiť / Uložiť PDF</button>
-  <button class="btn-close" onclick="window.close()">✕ Zavrieť</button>
+<div class="doc-header">
+  <div>
+    <div class="doc-title">FABRICATION MATERIALS ISSUE SLIP</div>
+    <div class="doc-sub">PMP Montex s.r.o. &nbsp;·&nbsp; Výdajka materiálu z výrobného skladu</div>
+  </div>
+  <div class="doc-meta">
+    <strong>Číslo výdajky:</strong> ${cislo}<br>
+    <strong>Izometria:</strong> ${iso}<br>
+    <strong>Sekcia:</strong> ${sec||'—'}<br>
+    <strong>Dátum:</strong> ${datum}
+  </div>
 </div>
-<div class="page">
-  <div class="doc-header">
-    <div>
-      <div class="doc-title">FABRICATION MATERIALS ISSUE SLIP</div>
-      <div class="doc-sub">PMP Montex s.r.o. &nbsp;·&nbsp; Výdajka materiálu z výrobného skladu</div>
-    </div>
-    <div class="doc-meta">
-      <strong>Číslo výdajky:</strong> ${cislo}<br>
-      <strong>Izometria:</strong> ${iso}<br>
-      <strong>Sekcia:</strong> ${sec||'—'}<br>
-      <strong>Dátum:</strong> ${datum}
-    </div>
-  </div>
-  <div class="section-bar">FABRICATION MATERIALS</div>
-  <table>
-    <thead><tr>
-      <th style="width:22px">Page</th>
-      <th style="width:28px">Pos.</th>
-      <th style="min-width:140px">Part Description</th>
-      <th style="min-width:120px">Standard</th>
-      <th style="min-width:90px">Dimensions</th>
-      <th style="width:70px">Material</th>
-      <th style="width:55px">QTY Izom.</th>
-      <th style="width:60px">Issued QTY</th>
-      <th style="width:65px">Date</th>
-      <th style="width:60px">Name</th>
-      <th style="min-width:80px">Heat Number</th>
-      ${thPipe}
-    </tr></thead>
-    <tbody>${rows}</tbody>
-  </table>
-  <div class="doc-footer">
-    <div class="sign-box"><div class="sign-line"></div>Vydal / Issued by</div>
-    <div class="sign-box"><div class="sign-line"></div>Prevzal / Received by</div>
-    <div class="sign-box"><div class="sign-line"></div>Dátum prevzatia / Date received</div>
-    <div style="flex:2;text-align:right;color:#bbb;font-size:8px">Generované: ${new Date().toLocaleString('sk-SK')} &nbsp;·&nbsp; SkaldManager v0.2</div>
-  </div>
+<div class="section-bar">FABRICATION MATERIALS</div>
+<table>
+  <thead><tr>
+    <th style="width:24px">Page</th>
+    <th style="width:30px">Pos.</th>
+    <th style="min-width:150px">Part Description</th>
+    <th style="min-width:130px">Standard</th>
+    <th style="min-width:90px">Dimensions</th>
+    <th style="width:75px">Material</th>
+    <th style="width:60px">QTY Izom.</th>
+    <th style="width:65px">Issued QTY</th>
+    <th style="width:70px">Date</th>
+    <th style="width:65px">Name</th>
+    <th style="min-width:90px">Heat Number</th>
+    ${thPipe}
+  </tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="doc-footer">
+  <div class="sign-box"><div class="sign-line"></div>Vydal / Issued by</div>
+  <div class="sign-box"><div class="sign-line"></div>Prevzal / Received by</div>
+  <div class="sign-box"><div class="sign-line"></div>Dátum prevzatia / Date received</div>
+  <div style="flex:2;text-align:right;color:#bbb;font-size:9px">Generované: ${new Date().toLocaleString('sk-SK')} &nbsp;·&nbsp; Warehouse Manager · PMP Montex</div>
 </div>
 </body></html>`;
 }
