@@ -533,8 +533,9 @@ function importDocx(e) {
     const file = files[0];
     setStatus('Čítam ' + file.name + ' ...', 'info');
     file.arrayBuffer().then(buf => {
-      mammoth.convertToHtml({ arrayBuffer: buf }).then(res => {
-        const parsed = parseHtml(res.value, file.name);
+      mammoth.convertToHtml({ arrayBuffer: buf, styleMap: ['strike => s'] }).then(res => {
+        const cleanHtml = res.value.replace(/<s>[^<]*<\/s>/gi, '');
+        const parsed = parseHtml(cleanHtml, file.name);
         if (!parsed.length) { setStatus('Nenašiel som žiadne položky.', 'err'); return; }
         // Duplikát check - ak DL číslo už existuje, ticho preskočiť
         const dlCislo = parsed[0] ? parsed[0].zdroj_dl : '';
@@ -552,8 +553,9 @@ function importDocx(e) {
     let done = 0;
     files.forEach(file => {
       file.arrayBuffer().then(buf => {
-        mammoth.convertToHtml({ arrayBuffer: buf }).then(res => {
-          const parsed = parseHtml(res.value, file.name);
+        mammoth.convertToHtml({ arrayBuffer: buf, styleMap: ['strike => s'] }).then(res => {
+          const cleanHtml = res.value.replace(/<s>[^<]*<\/s>/gi, '');
+          const parsed = parseHtml(cleanHtml, file.name);
           allItems = allItems.concat(parsed);
           done++;
           setStatus('Spracovaných ' + done + ' / ' + files.length + ' súborov...', 'info');
