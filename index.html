@@ -895,6 +895,8 @@ render();
           <label>Materiál:</label>
           <select id="vf-mat" onchange="renderVydMatList()" style="min-width:110px"><option value="">— všetky —</option></select>
           <button class="btn btn-gray" style="padding:4px 10px;font-size:12px" onclick="clearVydFilters()">× reset</button>
+          <button onclick="openTavbaScanner()" title="Skenovať tavbu fotoaparátom"
+            style="padding:5px 10px;border:1px solid #4f7cff;border-radius:5px;background:#e8f1fb;color:#1a5fa8;cursor:pointer;font-size:16px;line-height:1">📷</button>
           <span id="vf-count" style="font-size:11px;color:#888;margin-left:4px"></span>
         </div>
         <!-- Zoznam materiálov na výber -->
@@ -966,7 +968,6 @@ function editVydajka(idx) {
   vydIso = v.iso;
   vydIsoSec = v.sec;
 
-  // Načítaj riadky — nájdi itemIdx v sklade podľa typ+rozmer+tavba
   vydLines = v.lines.map(l => {
     const itemIdx = items.findIndex(it =>
       it.typ === l.typ && it.rozmer === l.rozmer && it.tavba === l.tavba
@@ -984,11 +985,9 @@ function editVydajka(idx) {
   });
 
   resetVydPanel();
-
-  // Zobraz izometriu priamo — preskoč výber
   selectVydIsoSilent(v.iso, v.sec);
+  renderVydMatList(); // ← hneď zobraziť sklad
 
-  // Naplň riadky
   const panel = document.getElementById('vyd-lines-panel');
   panel.style.display = 'flex';
   panel.style.flexDirection = 'column';
@@ -1728,6 +1727,245 @@ document.getElementById('vyd-overlay').addEventListener('click', function(e) {
 document.getElementById('zoznam-overlay').addEventListener('click', function(e) {
   if (e.target === this) this.style.display = 'none';
 });
+</script>
+
+<!-- TAVBA SKENER -->
+<div id="tavba-scanner-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:3000;flex-direction:column;align-items:center;justify-content:flex-start">
+
+  <!-- Kamera -->
+  <div style="position:relative;width:100%;max-width:640px;background:#000;flex-shrink:0">
+    <video id="tavba-video" autoplay playsinline muted style="width:100%;display:block;max-height:40vh;object-fit:cover"></video>
+    <!-- Zameriavací rámik -->
+    <div style="position:absolute;left:10%;right:10%;top:20%;bottom:20%;border:2px solid #4f7cff;border-radius:6px;pointer-events:none">
+      <div style="position:absolute;inset:0;background:rgba(79,124,255,0.04)"></div>
+      <span style="position:absolute;bottom:-22px;left:0;right:0;text-align:center;color:#9ab;font-size:11px">Namieriť na tavbu (Heat Number)</span>
+    </div>
+    <!-- Tlačidlá nad kamerou -->
+    <div style="position:absolute;top:8px;right:8px;display:flex;gap:6px">
+      <button id="tavba-capture-btn" onclick="captureTavba()"
+        style="background:#4f7cff;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">
+        📷 Skenuj
+      </button>
+      <button onclick="closeTavbaScanner()"
+        style="background:rgba(255,255,255,0.15);color:#fff;border:none;border-radius:6px;padding:8px 12px;font-size:13px;cursor:pointer">
+        ✕
+      </button>
+    </div>
+  </div>
+  <canvas id="tavba-canvas" style="display:none"></canvas>
+
+  <!-- Výsledky -->
+  <div style="width:100%;max-width:640px;background:#fff;flex:1;overflow-y:auto;display:flex;flex-direction:column">
+    <div id="tavba-scanning" style="display:none;padding:16px;text-align:center;color:#666;font-size:13px">
+      ⏳ Čítam tavbu...
+    </div>
+    <div id="tavba-results" style="flex:1;padding:12px 16px">
+      <div style="color:#aaa;font-size:12px;text-align:center;padding:20px">Stlačte Skenuj alebo zadajte tavbu ručne</div>
+    </div>
+    <!-- Ručné zadanie -->
+    <div style="padding:10px 16px;border-top:1px solid #eee;display:flex;gap:8px;background:#f7f8fa">
+      <input id="tavba-manual-inp" placeholder="Zadať tavbu ručne..." 
+        style="flex:1;padding:7px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;font-family:monospace;outline:none"
+        oninput="searchTavba(this.value)">
+      <button onclick="searchTavba(document.getElementById('tavba-manual-inp').value)"
+        style="padding:7px 14px;background:#4f7cff;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px">Hľadaj</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let tavbaStream = null;
+
+async function openTavbaScanner() {
+  if (!vydIso) { alert('Najprv vyberte izometriu'); return; }
+  document.getElementById('tavba-manual-inp').value = '';
+  document.getElementById('tavba-results').innerHTML =
+    '<div style="color:#aaa;font-size:12px;text-align:center;padding:20px">Stlačte Skenuj alebo zadajte tavbu ručne</div>';
+  document.getElementById('tavba-scanning').style.display = 'none';
+  document.getElementById('tavba-scanner-overlay').style.display = 'flex';
+
+  try {
+    tavbaStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    document.getElementById('tavba-video').srcObject = tavbaStream;
+  } catch(e) {
+    // Bez kamery — iba ručné zadanie
+    document.getElementById('tavba-video').parentElement.style.display = 'none';
+  }
+}
+
+function closeTavbaScanner() {
+  if (tavbaStream) { tavbaStream.getTracks().forEach(t => t.stop()); tavbaStream = null; }
+  document.getElementById('tavba-video').srcObject = null;
+  document.getElementById('tavba-video').parentElement.style.display = 'block';
+  document.getElementById('tavba-scanner-overlay').style.display = 'none';
+}
+
+async function captureTavba() {
+  const video = document.getElementById('tavba-video');
+  const canvas = document.getElementById('tavba-canvas');
+  if (!video.videoWidth) return;
+
+  // Odfotiť oblasť rámika (stred 80% šírky, stred 60% výšky)
+  const sx = video.videoWidth  * 0.10;
+  const sy = video.videoHeight * 0.20;
+  const sw = video.videoWidth  * 0.80;
+  const sh = video.videoHeight * 0.60;
+  canvas.width  = sw * 2;
+  canvas.height = sh * 2;
+  const ctx = canvas.getContext('2d');
+  ctx.filter = 'contrast(2) brightness(1.2) grayscale(1)';
+  ctx.scale(2, 2);
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
+
+  document.getElementById('tavba-scanning').style.display = 'block';
+  document.getElementById('tavba-capture-btn').textContent = '⏳';
+
+  try {
+    // Použiť Tesseract ak je dostupný (načítaný v IsoManageri)
+    let text = '';
+    if (typeof Tesseract !== 'undefined') {
+      const result = await Tesseract.recognize(canvas, 'eng');
+      text = result.data.text;
+    } else {
+      // Fallback — Tesseract nie je načítaný
+      document.getElementById('tavba-scanning').style.display = 'none';
+      document.getElementById('tavba-capture-btn').textContent = '📷 Skenuj';
+      document.getElementById('tavba-results').innerHTML =
+        '<div style="padding:16px;color:#e74c3c;font-size:12px">OCR knižnica nie je k dispozícii. Zadajte tavbu ručne.</div>';
+      return;
+    }
+
+    // Extrahuj možné tavby z textu (alfanumerické reťazce 4-15 znakov)
+    const tokens = [...new Set(
+      (text.match(/[A-Z0-9][A-Z0-9\/\-]{3,14}/g) || [])
+        .map(t => t.replace(/^[-\/]+|[-\/]+$/g, '').toUpperCase())
+        .filter(t => t.length >= 4)
+    )];
+
+    document.getElementById('tavba-scanning').style.display = 'none';
+    document.getElementById('tavba-capture-btn').textContent = '📷 Skenuj';
+
+    if (!tokens.length) {
+      document.getElementById('tavba-results').innerHTML =
+        '<div style="padding:16px;color:#e74c3c;font-size:12px">Tavba sa nenašla. Skúste znova alebo zadajte ručne.</div>';
+      return;
+    }
+
+    // Skús každý token ako tavbu
+    let found = false;
+    for (const tok of tokens) {
+      const matches = searchTavbaInItems(tok);
+      if (matches.length) {
+        document.getElementById('tavba-manual-inp').value = tok;
+        renderTavbaResults(tok, matches);
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      // Zobraziť všetky tokeny na výber
+      document.getElementById('tavba-results').innerHTML =
+        '<div style="padding:10px;font-size:12px;color:#666">Rozpoznané kódy — kliknite na správny:</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:6px;padding:0 10px">' +
+        tokens.map(t => `<button onclick="document.getElementById('tavba-manual-inp').value='${t}';searchTavba('${t}')"
+          style="padding:5px 12px;border:1px solid #4f7cff;border-radius:4px;background:#f0f5ff;color:#1a5fa8;cursor:pointer;font-family:monospace;font-size:12px">${t}</button>`
+        ).join('') + '</div>';
+    }
+  } catch(e) {
+    document.getElementById('tavba-scanning').style.display = 'none';
+    document.getElementById('tavba-capture-btn').textContent = '📷 Skenuj';
+    document.getElementById('tavba-results').innerHTML =
+      `<div style="padding:16px;color:#e74c3c;font-size:12px">Chyba OCR: ${e.message}</div>`;
+  }
+}
+
+function searchTavba(q) {
+  q = (q||'').toUpperCase().trim();
+  if (!q) return;
+  const matches = searchTavbaInItems(q);
+  renderTavbaResults(q, matches);
+}
+
+function searchTavbaInItems(q) {
+  return items
+    .map((it, idx) => ({ it, idx }))
+    .filter(({ it }) =>
+      (it.tavba||'').toUpperCase().includes(q) &&
+      parseFloat(it.zostatok) > 0
+    );
+}
+
+function renderTavbaResults(q, matches) {
+  const el = document.getElementById('tavba-results');
+  if (!matches.length) {
+    el.innerHTML = `<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">
+      Tavba <strong style="font-family:monospace;color:#333">${q}</strong> sa nenašla v sklade.</div>`;
+    return;
+  }
+
+  el.innerHTML = `<div style="padding:8px 4px;font-size:12px;color:#555;font-weight:600">
+    Tavba <span style="font-family:monospace;color:#1a5fa8">${q}</span> — ${matches.length} zhoda/zhôd:</div>` +
+  matches.map(({ it, idx }) => {
+    const q2 = parseFloat(it.zostatok)||0;
+    const qStr = it.jednotka==='m' ? q2.toFixed(2)+' m' : q2+' ks';
+    const qClass = q2<=0?'#e74c3c':q2<3?'#e67e22':'#27ae60';
+    return `<div style="border:1px solid #dde1e7;border-radius:6px;padding:10px 14px;margin-bottom:8px;background:#fff">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span class="badge badge-${typClass(it.typ)}">${shortType(it.typ)}</span>
+        <strong style="font-family:monospace">${it.rozmer}</strong>
+        <span style="font-size:11px;color:#666">${it.typ}</span>
+        <span style="margin-left:auto;font-weight:700;color:${qClass}">${qStr}</span>
+      </div>
+      <div style="font-size:11px;color:#888;margin-bottom:8px">
+        Tavba: <strong style="font-family:monospace;color:#1a5fa8">${it.tavba||'—'}</strong>
+        &nbsp;|&nbsp; ${it.material||''} &nbsp;|&nbsp; ${it.norma||''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:12px;color:#555">Počet:</label>
+        <input id="tavba-qty-${idx}" type="number" min="1" step="1" value="1"
+          style="width:70px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;font-family:monospace">
+        <button onclick="addFromTavbaScanner(${idx})"
+          style="flex:1;padding:6px 14px;background:#27ae60;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;font-weight:700">
+          ＋ Pridať do výdajky
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function addFromTavbaScanner(itemIdx) {
+  const qtyInp = document.getElementById(`tavba-qty-${itemIdx}`);
+  const qty = parseInt(qtyInp?.value) || 1;
+  const it = items[itemIdx];
+  if (!it) return;
+
+  // Nájdi existujúci riadok s rovnakým itemIdx
+  const existing = vydLines.findIndex(l => l.itemIdx === itemIdx);
+  if (existing >= 0) {
+    vydLines[existing].vydQty = (parseFloat(vydLines[existing].vydQty)||0) + qty;
+    const inp = document.querySelector(`#vyd-lines-tbody tr[data-idx="${existing}"] .inp-qty`);
+    if (inp) inp.value = vydLines[existing].vydQty;
+  } else {
+    vydLines.push({
+      itemIdx, typ: it.typ, rozmer: it.rozmer, material: it.material,
+      norma: it.norma, tavba: it.tavba, jednotka: it.jednotka,
+      stockMax: parseFloat(it.zostatok)||0,
+      vydQty: qty, dlzka: '', spCislo: '',
+      isPipe: (it.typ||'').toLowerCase().includes('pipe'),
+    });
+    const panel = document.getElementById('vyd-lines-panel');
+    panel.style.display = 'flex'; panel.style.flexDirection = 'column';
+    appendVydRow(vydLines.length - 1);
+    updateHasPipeCols();
+  }
+  updateVydCount();
+
+  // Vizuálna spätná väzba
+  const btn = document.querySelector(`#tavba-results div:has(#tavba-qty-${itemIdx}) button`);
+  if (btn) { btn.textContent = '✓ Pridané'; btn.style.background = '#1a5fa8'; }
+}
 </script>
 </body>
 </html>
