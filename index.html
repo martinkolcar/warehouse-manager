@@ -605,104 +605,118 @@ function parseHtml(html, filename) {
   const dom = new DOMParser().parseFromString(html, 'text/html');
   const result = [];
 
-  // Číslo DL z HTML textu
   const dlMatch = html.match(/DL\s*\d{4}\/[\d]+\/[\d]+/);
   const dlCislo = dlMatch ? dlMatch[0].replace(/\s/g,'') : filename.replace(/\.[^.]+$/,'');
 
   for (const tbl of dom.querySelectorAll('table')) {
     const rows = [...tbl.querySelectorAll('tr')];
-    let started = false;
+    if (rows.length < 2) continue;
 
-    for (const row of rows) {
-      const cells = [...row.querySelectorAll('td,th')].map(c => c.textContent.trim());
-      if (!cells.length) continue;
+    // ── Detekcia formátu podľa hlavičky ──────────────────────────
+    // Formát A (doterajší): Description | Rozmer | Norma | [Pozn] | Qty | ✓ | Tavba
+    // Formát B (nový MK Montex): Pos | Description | Rozmer | Norma | (prázdny) | KS | Tavba
+    let formatB = false;
+    let dataRows = [];
 
-      // Header riadok
-      if (!started) {
-        if (cells.some(c => c.toLowerCase().includes('description'))) {
-          started = true;
+    for (let ri = 0; ri < rows.length; ri++) {
+      const cells = [...rows[ri].querySelectorAll('td,th')].map(c => c.textContent.trim());
+      const joined = cells.join('|').toLowerCase();
+      if (joined.includes('description') || joined.includes('ks') || joined.includes('tavba')) {
+        // Ak prvá bunka je prázdna alebo číslo a druhá je description → Formát B
+        if (cells.length >= 6 && (joined.includes('ks') || joined.includes('tavba'))) {
+          // Skontroluj či prvý dátový riadok má číslo na pozícii 0
+          const nextRow = rows[ri+2] ? [...rows[ri+2].querySelectorAll('td,th')].map(c=>c.textContent.trim()) : [];
+          if (nextRow.length >= 6 && /^\d+$/.test(nextRow[0].replace(/\s/g,''))) {
+            formatB = true;
+          }
         }
-        continue;
+        dataRows = rows.slice(ri + 2); // preskoč header + separator
+        break;
+      }
+      // Ak nenájde hlavičku ale riadok vyzerá ako dáta (prvá bunka = číslo, druhá = text s "elbow/reducer/pipe/tee/flange/cap")
+      if (/^\d+$/.test(cells[0]) && cells[1] && /elbow|reducer|pipe|tee|flange|cap|t-piece|bend/i.test(cells[1])) {
+        formatB = true;
+        dataRows = rows.slice(ri);
+        break;
+      }
+    }
+
+    if (!dataRows.length) continue;
+
+    for (const row of dataRows) {
+      const cells = [...row.querySelectorAll('td,th')].map(c => c.textContent.trim());
+      if (cells.length < 3) continue;
+
+      let desc, rozmer, norma, qtyRaw, tavbaRaw;
+
+      if (formatB) {
+        // Formát B: pos | desc | rozmer | norma | (prázdny) | KS | Tavba
+        if (!/^\d+$/.test((cells[0]||'').replace(/\s/g,''))) continue;
+        desc     = cells[1] || '';
+        rozmer   = cells[2] || '';
+        norma    = cells[3] || '';
+        qtyRaw   = cells[5] || '';
+        tavbaRaw = cells[6] || '';
+      } else {
+        // Formát A: desc | rozmer | norma | [pozn] | qty | ✓ | tavba
+        desc   = cells[0] || '';
+        rozmer = cells[1] || '';
+        norma  = cells[2] || '';
+        // Hľadaj qty a tavbu od pozície 3
+        qtyRaw = ''; tavbaRaw = '';
+        let qtyFound = false;
+        for (let i = 3; i < cells.length; i++) {
+          const raw = cells[i].replace(/[✓√\s]/g,'');
+          if (!raw) continue;
+          if (!qtyFound) {
+            if (/^[\d,\.]+$/.test(raw)) { qtyRaw = raw; qtyFound = true; }
+          } else {
+            tavbaRaw = cells[i];
+          }
+        }
       }
 
-      const desc   = cells[0] || '';
-      const rozmer = cells[1] || '';
-      const norma  = cells[2] || '';
       if (!desc || !rozmer) continue;
 
-      // Qty a tavba
-      // Rúry:   desc | rozmer | norma | qty  | ✓ | tavba
-      // Fiting: desc | rozmer | norma | pozn | qty | ✓ | tavba
-      // Pozn. = text ktorý nie je číslo (napr. 60,3x3,2-33,7x3,2)
-      let qty = 0, tavba = '', poznamka = '';
-      let qtyFound = false;
-      for (let i = 3; i < cells.length; i++) {
-        const raw = cells[i];
-        if (!raw) continue;
-        const cleaned = raw.replace(/[✓√\s]/g, '');
-        if (!cleaned) continue;
+      // Vyčisti rozmer — ak obsahuje dve hodnoty (napr. "26.7x2 26,9X2") vezmi prvú
+      rozmer = rozmer.split(/\s+/)[0].replace(',','.');
 
-        if (!qtyFound) {
-          const num = cleaned.replace(',', '.').match(/^(\d+\.?\d*)$/);
-          if (num) {
-            // Je to číslo = qty
-            qty = parseFloat(num[1]) || 0;
-            qtyFound = true;
-          } else {
-            // Nie je číslo = poznamka (Pozn. stĺpec)
-            poznamka = cleaned;
-          }
-          continue;
-        }
-        // Po qty — tavba je posledná neprázdna hodnota
-        tavba = cleaned;
-      }
-
+      // Qty
+      const qty = parseFloat((qtyRaw||'').replace(/[✓√\s]/g,'').replace(',','.')) || 0;
       if (qty === 0) continue;
 
-      const isPipe = desc.toLowerCase().includes('pipe');
-      const matMatch = norma.match(/^([A-Z]\d+[A-Z]*)/);
-      const material = matMatch ? matMatch[1] : (norma.split(',')[0] || '').trim();
+      // Tavba — vyčisti ✓ a whitespace
+      const tavba = (tavbaRaw||'').replace(/[✓√]/g,'').trim();
 
-      // ─── Multi-tavba split (len pre non-pipe) ───
-      // Formát: "S3805-21ks,1221261-83ks" alebo "R56791-10ks,R61462-5ks"
+      const isPipe = desc.toLowerCase().includes('pipe');
+      const matMatch = norma.match(/^([A-Z0-9][A-Za-z0-9]*)/);
+      const material = matMatch ? matMatch[1] : (norma.split(',')[0]||'').trim();
+
+      // Multi-tavba split pre non-pipe: "S3805-21ks,1221261-83ks"
       if (!isPipe && tavba && tavba.includes(',')) {
-        // Skús rozbiť: každý segment má formu <tavba>-<qty>ks alebo <tavba>,<qty>ks
-        const segments = tavba.split(',').map(s => s.trim()).filter(Boolean);
-        // Skontroluj či každý segment má qty suffix (napr. 21ks alebo 21)
+        const segments = tavba.split(',').map(s=>s.trim()).filter(Boolean);
         const parsed = segments.map(seg => {
           const m = seg.match(/^(.+?)-?(\d+)\s*ks?$/i);
-          if (m) return { tavba: m[1].trim(), qty: parseFloat(m[2]) };
-          return null;
+          return m ? { tavba: m[1].trim(), qty: parseFloat(m[2]) } : null;
         });
-        if (parsed.every(p => p !== null)) {
-          // Každý segment = samostatný riadok
-          parsed.forEach(p => {
-            result.push({
-              typ: desc, rozmer, material, norma,
-              jednotka: 'ks',
-              zostatok: p.qty,
-              tavba: p.tavba,
-              poznamka,
-              zdroj_dl: dlCislo,
-              datum: new Date().toISOString().split('T')[0],
-            });
-          });
-          continue; // preskoč normálne pridanie
+        if (parsed.every(p=>p!==null)) {
+          parsed.forEach(p => result.push({
+            typ: desc, rozmer, material, norma,
+            jednotka: 'ks', zostatok: p.qty, tavba: p.tavba,
+            poznamka: '', zdroj_dl: dlCislo,
+            datum: new Date().toISOString().split('T')[0],
+          }));
+          continue;
         }
       }
 
       result.push({
-        typ:      desc,
-        rozmer:   rozmer,
-        material: material,
-        norma:    norma,
+        typ: desc, rozmer, material, norma,
         jednotka: isPipe ? 'm' : 'ks',
-        zostatok: qty,
-        tavba:    tavba,
-        poznamka: poznamka,
+        zostatok: qty, tavba,
+        poznamka: '',
         zdroj_dl: dlCislo,
-        datum:    new Date().toISOString().split('T')[0],
+        datum: new Date().toISOString().split('T')[0],
       });
     }
   }
