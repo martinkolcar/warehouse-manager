@@ -15,6 +15,7 @@ body { font-family: Arial, sans-serif; background: #f0f2f5; color: #1a1a2e; font
 header {
   background: #1a1a2e; color: #fff; padding: 14px 24px;
   display: flex; align-items: center; gap: 16px;
+  position: sticky; top: 0; z-index: 100;
 }
 header h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.03em; }
 header h1 span { color: #4f7cff; }
@@ -23,6 +24,7 @@ header .sub { font-size: 12px; color: #9a9bb0; }
 .toolbar {
   background: #fff; border-bottom: 1px solid #dde1e7;
   padding: 12px 24px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  position: sticky; top: 57px; z-index: 99;
 }
 
 .btn {
@@ -43,6 +45,7 @@ header .sub { font-size: 12px; color: #9a9bb0; }
 .filters {
   background: #fff; border-bottom: 1px solid #dde1e7;
   padding: 10px 24px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  position: sticky; top: 108px; z-index: 98;
 }
 .filters label { font-size: 12px; color: #666; }
 .filters input, .filters select {
@@ -526,13 +529,11 @@ function importDocx(e) {
       mammoth.convertToHtml({ arrayBuffer: buf }).then(res => {
         const parsed = parseHtml(res.value, file.name);
         if (!parsed.length) { setStatus('Nenašiel som žiadne položky.', 'err'); return; }
-        // Duplikát check
-        const dlCislo = parsed[0].zdroj_dl;
-        const existing = items.filter(it => it.zdroj_dl === dlCislo);
-        if (existing.length) {
-          if (!confirm('DL ' + dlCislo + ' bol už importovaný (' + existing.length + ' položiek).\nAk pokračujete, množstvá sa pripočítajú (alebo zlúčia).\n\nPokračovať?')) {
-            setStatus('Import zrušený.', ''); return;
-          }
+        // Duplikát check - ak DL číslo už existuje, ticho preskočiť
+        const dlCislo = parsed[0] ? parsed[0].zdroj_dl : '';
+        if (dlCislo && items.some(it => it.zdroj_dl === dlCislo)) {
+          setStatus('DL ' + dlCislo + ' už bol importovaný — preskočený.', 'info');
+          return;
         }
         previewItems = parsed;
         showPreview(parsed, file.name);
@@ -596,10 +597,11 @@ function parseHtml(html, filename) {
         break;
       }
 
-      // Formát C: prvá bunka = text sekcie, druhá = typ fitingu
-      if (cells.length >= 6 && cells[0] && !/^\d+$/.test(cells[0]) &&
-          /elbow|reducer|pipe|tee|flange|cap|socket|hexagonal|sulfaloop|bend/i.test(cells[1]||'') &&
-          /^\d+/.test(cells[2]||'')) {
+      // Formát C: dodávateľ v col0, typ fitingu v col1, rozmer v col2
+      // Sulfaloop | Elbow Type A, 3D | 26.7x2 | norma | qty✓ | tavba
+      if (cells.length >= 5 && cells[0] && !/^\d+$/.test(cells[0]) &&
+          cells[1] && /elbow|reducer|pipe|tee|flange|cap|socket|hexagonal|bend|weld/i.test(cells[1]) &&
+          cells[2] && /\d+[\.,]\d+/.test(cells[2])) {
         format = 'C';
         dataRows = rows.slice(ri);
         break;
@@ -630,13 +632,16 @@ function parseHtml(html, filename) {
         qtyRaw   = cells[5] || '';
         tavbaRaw = cells[6] || '';
       } else if (format === 'C') {
-        // Sekcia | Typ | DN | Rozmer | Norma | Qty | Tavba
-        if (!cells[1] || !/elbow|reducer|pipe|tee|flange|cap|socket|hexagonal|sulfaloop|bend/i.test(cells[1])) continue;
-        desc     = cells[1] || '';
-        rozmer   = cells[3] || '';  // skutočný rozmer napr. 33.7x2
-        norma    = cells[4] || '';
-        qtyRaw   = cells[5] || '';
-        tavbaRaw = cells[6] || '';
+        // Formát C (Sulfaloop/Lignarec/Dryer):
+        // Dodávateľ | Typ fitingu | Rozmer | Norma | KS✓ | Tavba
+        if (!cells[1] || !cells[2]) continue;
+        // Preskočiť ak prvá bunka neobsahuje názov dodávateľa (prázdny riadok)
+        if (!cells[0] && !cells[1]) continue;
+        desc     = cells[1] || '';  // Elbow Type A, 3D (r=1.5xD)
+        rozmer   = cells[2] || '';  // 26.7x2
+        norma    = cells[3] || '';  // 1.4307, EN 10253-4, 3.1
+        qtyRaw   = cells[4] || '';  // 4✓
+        tavbaRaw = cells[5] || '';  // 0474306
       } else {
         // Formát A: Typ | Rozmer | Norma | [Pozn] | Qty | ✓ | Tavba
         desc   = cells[0] || '';
