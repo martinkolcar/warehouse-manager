@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sklad — PMP Montex</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-app-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-database-compat.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: Arial, sans-serif; background: #f0f2f5; color: #1a1a2e; font-size: 14px; }
@@ -258,6 +260,7 @@ table.main td.center { text-align: center; }
   </div>
   <div style="flex:1"></div>
   <button class="btn" style="background:#4f7cff;color:#fff;font-size:13px;padding:9px 20px;border-radius:6px" onclick="openVydajkaWindow()">📋 Nová výdajka</button>
+  <span id="sync-status" style="font-size:11px;margin-left:10px;color:#f59e0b">⏳ Pripájam...</span>
 </header>
 
 <div class="toolbar">
@@ -380,13 +383,57 @@ table.main td.center { text-align: center; }
 </div>
 
 <script>
-// ─── DÁTA (localStorage) ───────────────────────
-let items = JSON.parse(localStorage.getItem('sklad_items') || '[]');
+// ─── DÁTA (Firebase + localStorage fallback) ───
+let items = [];
 let editIdx = null;
 let previewItems = [];
 
+function setSyncStatus(msg, color) {
+  const el = document.getElementById('sync-status');
+  if (el) { el.textContent = msg; el.style.color = color; }
+}
+
+function initFirebase() {
+  if (!window._fbReady) {
+    items = JSON.parse(localStorage.getItem('sklad_items') || '[]');
+    vydajkyList = JSON.parse(localStorage.getItem('vydajky') || '[]');
+    setSyncStatus('⚠ Offline', '#e74c3c');
+    render();
+    populateMainFilters();
+    return;
+  }
+  setSyncStatus('⏳ Pripájam...', '#f59e0b');
+  window._fbOn(window._fbRef('sklad'), snap => {
+    items = snap.val() ? Object.values(snap.val()) : [];
+    setSyncStatus('☁ Online', '#27ae60');
+    render();
+    populateMainFilters();
+  }, () => {
+    items = JSON.parse(localStorage.getItem('sklad_items') || '[]');
+    setSyncStatus('⚠ Offline', '#e74c3c');
+    render();
+  });
+  window._fbOn(window._fbRef('vydajky'), snap => {
+    vydajkyList = snap.val() ? Object.values(snap.val()) : [];
+  });
+}
+
 function save() {
-  localStorage.setItem('sklad_items', JSON.stringify(items));
+  if (!window._fbReady) { localStorage.setItem('sklad_items', JSON.stringify(items)); return; }
+  const obj = {};
+  items.forEach((it, i) => { obj[i] = it; });
+  window._fbSet(window._fbRef('sklad'), obj).catch(() => {
+    localStorage.setItem('sklad_items', JSON.stringify(items));
+  });
+}
+
+function saveVydajkyFb() {
+  if (!window._fbReady) { localStorage.setItem('vydajky', JSON.stringify(vydajkyList)); return; }
+  const obj = {};
+  vydajkyList.forEach((v, i) => { obj[i] = v; });
+  window._fbSet(window._fbRef('vydajky'), obj).catch(() => {
+    localStorage.setItem('vydajky', JSON.stringify(vydajkyList));
+  });
 }
 
 // ─── RENDER TABUĽKY ───────────────────────────
@@ -826,8 +873,29 @@ document.getElementById('modal').addEventListener('click', function(e) {
   if (e.target === this) closeModal();
 });
 
-// Init
-render();
+// Init — dynamicky načítaj Firebase a spusti
+window.addEventListener('DOMContentLoaded', function() {
+  try {
+    firebase.initializeApp({
+      apiKey: "AIzaSyD7lqAVEY3-UZAWu-q2o_6YkOkTyyV4tOA",
+      authDomain: "warehouse-montex.firebaseapp.com",
+      databaseURL: "https://warehouse-montex-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "warehouse-montex",
+      storageBucket: "warehouse-montex.firebasestorage.app",
+      messagingSenderId: "1071159413037",
+      appId: "1:1071159413037:web:93ffc2eb346b781c5b2ba4"
+    });
+    const db = firebase.database();
+    window._fbRef  = (path) => db.ref(path);
+    window._fbSet  = (ref, val) => ref.set(val);
+    window._fbOn   = (ref, cb, err) => ref.on('value', cb, err);
+    window._fbReady = true;
+  } catch(e) {
+    console.warn('Firebase init error:', e.message);
+    window._fbReady = false;
+  }
+  initFirebase();
+});
 </script>
 <div id="merge-info-overlay" class="merge-info-overlay">
   <div class="merge-info-box">
@@ -946,7 +1014,7 @@ const ISOS = {
 };
 
 // ─── VÝDAJKA STATE ────────────────────────────
-let vydajkyList = JSON.parse(localStorage.getItem('vydajky') || '[]');
+let vydajkyList = [];
 let vydLines = [];
 let vydIso = null;
 let vydIsoSec = null;
@@ -1407,7 +1475,7 @@ function saveVydajka(mode) {
   }
 
   save();
-  localStorage.setItem('vydajky', JSON.stringify(vydajkyList));
+  saveVydajkyFb();
   render();
 
   if (mode === 'pdf') openVydNahladFromData(vydajkyList[vydEditIdx !== null ? vydEditIdx : vydajkyList.length-1]);
@@ -1711,7 +1779,7 @@ function deleteVydajka(idx) {
   });
   vydajkyList.splice(idx, 1);
   save();
-  localStorage.setItem('vydajky', JSON.stringify(vydajkyList));
+  saveVydajkyFb();
   render();
   openVydajkyZoznam();
   setStatus('Výdajka vymazaná, množstvá vrátené do skladu.', 'ok');
