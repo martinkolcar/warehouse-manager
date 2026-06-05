@@ -269,6 +269,13 @@ table.main td.center { text-align: center; }
     </div>
   </div>
   <div style="flex:1"></div>
+  <!-- Jazyky -->
+  <div style="display:flex;gap:2px;background:rgba(255,255,255,0.07);border-radius:7px;padding:3px;margin-right:10px">
+    <button onclick="setLang('sk')" id="hLangBtn_sk" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 4px;border-radius:4px;opacity:1" title="Slovenčina">🇸🇰</button>
+    <button onclick="setLang('en')" id="hLangBtn_en" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 4px;border-radius:4px;opacity:0.4" title="English">🇬🇧</button>
+    <button onclick="setLang('de')" id="hLangBtn_de" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 4px;border-radius:4px;opacity:0.4" title="Deutsch">🇩🇪</button>
+    <button onclick="setLang('uk')" id="hLangBtn_uk" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 4px;border-radius:4px;opacity:0.4" title="Українська">🇺🇦</button>
+  </div>
   <!-- Online používatelia -->
   <div id="online-bar" style="display:none;align-items:center;gap:6px;margin-right:16px"></div>
   <button class="btn" style="background:#4f7cff;color:#fff;font-size:13px;padding:9px 20px;border-radius:6px" onclick="openVydajkaWindow()">📋 Nová výdajka</button>
@@ -1088,44 +1095,57 @@ function renderIsoList(q) {
   var ql = (q||'').toLowerCase().trim();
   var el = document.getElementById('vyd-iso-list');
 
-  // Načítaj izometrie z Firebase pre aktuálny projekt
-  var isoSource = window._projectIsos || [];
+  var isoSource = window._projectIsos;
 
-  if (!isoSource.length) {
-    // Skús načítať
+  // Ak ešte nenačítané — načítaj z Firebase, fallback na statické ISOS
+  if (!isoSource) {
+    window._projectIsos = null; // loading stav
+    el.innerHTML = '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">⏳ Načítavam...</div>';
     if (_currentProject && window._fbReady) {
-      el.innerHTML = '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">⏳ Načítavam...</div>';
       window.db.ref('projects/' + _currentProject.id + '/isometries').once('value', function(snap) {
         var val = snap.val() || {};
-        window._projectIsos = Object.values(val).sort();
+        var fbList = Object.values(val).sort();
+        // Ak Firebase prázdny → použij statické ISOS
+        if (fbList.length) {
+          window._projectIsos = fbList;
+        } else {
+          var all = [];
+          Object.values(ISOS).forEach(function(arr){ arr.forEach(function(iso){ all.push(iso); }); });
+          window._projectIsos = all.sort();
+        }
         renderIsoList(q);
       });
-      return;
     } else {
-      // Fallback na statické ISOS
-      Object.values(ISOS).forEach(function(arr) { arr.forEach(function(iso){ isoSource.push(iso); }); });
+      var all = [];
+      Object.values(ISOS).forEach(function(arr){ arr.forEach(function(iso){ all.push(iso); }); });
+      window._projectIsos = all.sort();
+      renderIsoList(q);
     }
+    return;
   }
 
-  // Filtruj podľa sekcie (sekcia = prvá časť názvu pred '-')
+  // Filter
   var filtered = isoSource.filter(function(iso) {
     if (sec) {
-      // Skús nájsť sekciu v názve
-      var parts = iso.split('-');
-      if (parts.length >= 2) {
-        // Sekcia je zvyčajne v časti ako SUL, FLA, LIG atď.
-        if (!iso.toUpperCase().includes(sec.toUpperCase()) &&
-            !Object.keys(ISOS).some(function(s){ return s===sec && ISOS[s].includes(iso); })) return false;
-      }
+      // Skontroluj sekciu zo statického ISOS
+      var inSec = false;
+      if (ISOS[sec] && ISOS[sec].includes(iso)) inSec = true;
+      // Pre PDF izometrie — sekcia je prefix v názve
+      if (!inSec && iso.toUpperCase().includes(sec.toUpperCase())) inSec = true;
+      if (!inSec) return false;
     }
     if (ql && !iso.toLowerCase().includes(ql)) return false;
     return true;
   });
 
+  if (!isoSource.length || (!ql && !sec)) {
+    el.innerHTML = '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">Zadajte hľadaný text alebo vyberte sekciu</div>';
+    // Ale ak máme filter, ukáž výsledky
+    if (!ql && !sec) return;
+  }
+
   if (!filtered.length) {
-    el.innerHTML = ql || sec
-      ? '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">Žiadne výsledky</div>'
-      : '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">Zadajte hľadaný text</div>';
+    el.innerHTML = '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">Žiadne výsledky</div>';
     return;
   }
 
@@ -1133,8 +1153,11 @@ function renderIsoList(q) {
     var esc = iso.replace(/'/g, "\\'");
     var active = vydIso === iso ? ' active' : '';
     var highlighted = ql ? iso.replace(new RegExp('(' + ql.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi'), '<mark style="background:#fff3b0;border-radius:2px">$1</mark>') : iso;
+    // Sekcia badge pre statické izometrie
+    var secBadge = '';
+    Object.entries(ISOS).forEach(function(e){ if(e[1].includes(iso)) secBadge = '<span class="vyd-sec-tag">' + e[0] + '</span>'; });
     return '<div class="vyd-iso-item' + active + '" onclick="selectVydIso(\'' + esc + '\',\'\')">' +
-      '<span class="vyd-iso-name">' + highlighted + '</span>' +
+      '<span class="vyd-iso-name">' + highlighted + '</span>' + secBadge +
       '</div>';
   }).join('');
 }
@@ -2160,8 +2183,12 @@ function t(k){ return (LANGS[_lang]||LANGS.sk)[k]||k; }
 function setLang(l){
   _lang = l; localStorage.setItem('wmLang', l);
   ['sk','en','de','uk'].forEach(function(x){
+    // Login screen vlajky
     var b=document.getElementById('langBtn_'+x);
     if(b) b.style.opacity = x===l ? '1' : '0.4';
+    // Header vlajky
+    var hb=document.getElementById('hLangBtn_'+x);
+    if(hb) hb.style.opacity = x===l ? '1' : '0.4';
   });
   applyLangLogin();
 }
