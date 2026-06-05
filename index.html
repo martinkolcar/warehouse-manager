@@ -272,6 +272,7 @@ table.main td.center { text-align: center; }
   <button class="btn btn-gray" onclick="openAddModal()">+ Pridať ručne</button>
   <button class="btn btn-gray" onclick="exportCSV()">⬇ Export CSV</button>
   <button class="btn btn-gray" onclick="openVydajkyZoznam()" style="background:#f0f4ff;border-color:#4f7cff;color:#4f7cff">📋 Výdajky</button>
+  <button id="migrate-btn" class="btn btn-gray" onclick="migrateToFirebase()" style="display:none;background:#fff7ed;border-color:#f59e0b;color:#b45309">☁ Preniesť do cloudu</button>
   <span style="flex:1"></span>
   <button class="btn btn-red" onclick="clearAll()">🗑 Vymazať všetko</button>
 </div>
@@ -404,8 +405,18 @@ function initFirebase() {
   }
   setSyncStatus('⏳ Pripájam...', '#f59e0b');
   window._fbOn(window._fbRef('sklad'), snap => {
-    items = snap.val() ? Object.values(snap.val()) : [];
-    setSyncStatus('☁ Online', '#27ae60');
+    const fbData = snap.val() ? Object.values(snap.val()) : [];
+    const local  = JSON.parse(localStorage.getItem('sklad_items') || '[]');
+    // Ak Firebase prázdny ale localStorage má dáta → ponúknuť migráciu
+    if (fbData.length === 0 && local.length > 0) {
+      items = local;
+      document.getElementById('migrate-btn').style.display = 'inline-block';
+      setSyncStatus('☁ Online — lokálne dáta čakajú na prenos', '#f59e0b');
+    } else {
+      items = fbData;
+      document.getElementById('migrate-btn').style.display = 'none';
+      setSyncStatus('☁ Online', '#27ae60');
+    }
     render();
     populateMainFilters();
   }, () => {
@@ -414,8 +425,25 @@ function initFirebase() {
     render();
   });
   window._fbOn(window._fbRef('vydajky'), snap => {
-    vydajkyList = snap.val() ? Object.values(snap.val()) : [];
+    const fbVyd   = snap.val() ? Object.values(snap.val()) : [];
+    const localVyd = JSON.parse(localStorage.getItem('vydajky') || '[]');
+    vydajkyList = fbVyd.length > 0 ? fbVyd : localVyd;
   });
+}
+
+function migrateToFirebase() {
+  const local    = JSON.parse(localStorage.getItem('sklad_items') || '[]');
+  const localVyd = JSON.parse(localStorage.getItem('vydajky') || '[]');
+  if (!local.length && !localVyd.length) { alert('Nie sú žiadne lokálne dáta.'); return; }
+  if (!confirm(`Preniesť ${local.length} položiek skladu a ${localVyd.length} výdajok do Firebase?\nPo prenose budú viditeľné na všetkých zariadeniach.`)) return;
+
+  items = local;
+  vydajkyList = localVyd;
+  save();
+  saveVydajkyFb();
+  document.getElementById('migrate-btn').style.display = 'none';
+  setSyncStatus('☁ Online', '#27ae60');
+  setStatus(`✓ Prenesených ${local.length} položiek a ${localVyd.length} výdajok do Firebase.`, 'ok');
 }
 
 function save() {
