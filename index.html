@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sklad — PMP Montex</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-database-compat.min.js"></script>
 <style>
@@ -1886,222 +1887,178 @@ document.getElementById('zoznam-overlay').addEventListener('click', function(e) 
 <canvas id="tavba-canvas" style="display:none"></canvas>
 
 <script>
-let tavbaStream = null;
-let tavbaScanLoop = null;
-let tavbaLastFound = '';
-let tavbaDebounce = 0;
+var _tavbaStream = null;
+var _tavbaWorker = null;
+var _tavbaInterval = null;
+var _tavbaRunning = false;
+var _tavbaLastResult = '';
 
 async function openTavbaScanner() {
   if (!vydIso) { alert('Najprv vyberte izometriu'); return; }
   document.getElementById('tavba-manual-inp').value = '';
   document.getElementById('tavba-results').innerHTML =
-    '<div style="color:#aaa;font-size:12px;text-align:center;padding:16px">Nasmerujte kameru na tavbu fitingu…</div>';
+    '<div style="color:#aaa;font-size:12px;text-align:center;padding:16px">Nasmerujte kameru na gravírovanú tavbu…</div>';
+  document.getElementById('tavba-scan-status').innerHTML =
+    '<span style="background:rgba(0,0,0,0.6);color:#9ab;font-size:12px;padding:4px 14px;border-radius:20px">🔍 Inicializujem…</span>';
   document.getElementById('tavba-scanner-overlay').style.display = 'flex';
-  tavbaLastFound = '';
+  _tavbaLastResult = '';
 
   try {
-    tavbaStream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: 'environment' },
-        width: { ideal: 1920 }, height: { ideal: 1080 },
-        focusMode: { ideal: 'continuous' },
-        zoom: { ideal: 1 }
-      }
+    _tavbaStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
     });
-    const video = document.getElementById('tavba-video');
-    video.srcObject = tavbaStream;
-    video.onloadedmetadata = () => {
-      video.play();
-      startScanLoop();
-    };
+    var video = document.getElementById('tavba-video');
+    video.srcObject = _tavbaStream;
+    await video.play();
+
+    // Init Tesseract worker
+    _tavbaRunning = true;
+    if (!_tavbaWorker) {
+      _tavbaWorker = await Tesseract.createWorker('eng');
+    }
+    document.getElementById('tavba-scan-status').innerHTML =
+      '<span style="background:rgba(0,0,0,0.6);color:#9ab;font-size:12px;padding:4px 14px;border-radius:20px">📷 Skenuje…</span>';
+    _tavbaInterval = setInterval(doTavbaScanFrame, 1200);
   } catch(e) {
     document.getElementById('tavba-scan-status').innerHTML =
-      '<span style="background:rgba(200,50,50,0.7);color:#fff;font-size:12px;padding:4px 14px;border-radius:20px">Kamera nedostupná — zadajte ručne</span>';
+      '<span style="background:rgba(200,50,50,0.7);color:#fff;font-size:12px;padding:4px 14px;border-radius:20px">❌ ' + e.message + '</span>';
   }
 }
 
 function closeTavbaScanner() {
-  stopScanLoop();
-  if (tavbaStream) { tavbaStream.getTracks().forEach(t => t.stop()); tavbaStream = null; }
+  _tavbaRunning = false;
+  if (_tavbaInterval) { clearInterval(_tavbaInterval); _tavbaInterval = null; }
+  if (_tavbaStream) { _tavbaStream.getTracks().forEach(function(t){ t.stop(); }); _tavbaStream = null; }
   document.getElementById('tavba-scanner-overlay').style.display = 'none';
 }
 
-function startScanLoop() {
-  stopScanLoop();
-  // Animovaná skenovacia čiara
-  let linePos = 0; let lineDir = 1;
-  const line = document.getElementById('scan-line');
+async function doTavbaScanFrame() {
+  if (!_tavbaRunning) return;
+  var video = document.getElementById('tavba-video');
+  var canvas = document.getElementById('tavba-canvas');
+  if (!video || video.readyState < 2) return;
 
-  tavbaScanLoop = setInterval(async () => {
-    // Pohyb čiary
-    linePos += lineDir * 3;
-    if (linePos >= 90) lineDir = -1;
-    if (linePos <= 0)  lineDir = 1;
-    if (line) line.style.top = linePos + '%';
+  // Crop iba skenovacia zóna — stredný pruh (35%-65% výšky, celá šírka)
+  var vw = video.videoWidth, vh = video.videoHeight;
+  var cropH = Math.round(vh * 0.30);
+  var cropY = Math.round(vh * 0.5 - cropH / 2);
+  canvas.width = vw;
+  canvas.height = cropH;
+  var ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, cropY, vw, cropH, 0, 0, vw, cropH);
 
-    // Skenuj každých 600ms
-    if (Date.now() - tavbaDebounce < 600) return;
-    tavbaDebounce = Date.now();
+  try {
+    var result = await _tavbaWorker.recognize(canvas);
+    var rawText = (result.data.text || '').toUpperCase().trim();
+    if (!rawText) return;
 
-    const result = await scanFrame();
-    if (result) {
-      if (result !== tavbaLastFound) {
-        tavbaLastFound = result;
-        searchTavba(result);
-        document.getElementById('tavba-manual-inp').value = result;
-        // Bliknutie rámika
-        if (line) { line.style.background = '#27ae60'; setTimeout(()=>{ if(line) line.style.background='rgba(79,124,255,0.8)'; }, 400); }
-      }
+    // Extrahuj tokeny — len alfanumerické reťazce 4-15 znakov
+    var tokens = [];
+    var found = rawText.match(/[A-Z0-9][A-Z0-9\-\/]{3,14}/g) || [];
+    found.forEach(function(t) {
+      t = t.replace(/^[-\/]+|[-\/]+$/g, '');
+      if (t.length >= 4) tokens.push(t);
+    });
+    tokens = [...new Set(tokens)];
+
+    if (!tokens.length) return;
+
+    // Hľadaj token ktorý je v tavbách skladu
+    var matchedTok = null;
+    var matchedItems = [];
+    for (var i = 0; i < tokens.length; i++) {
+      var m = searchTavbaInItems(tokens[i]);
+      if (m.length) { matchedTok = tokens[i]; matchedItems = m; break; }
     }
-  }, 150);
-}
 
-function stopScanLoop() {
-  if (tavbaScanLoop) { clearInterval(tavbaScanLoop); tavbaScanLoop = null; }
-}
-
-async function scanFrame() {
-  const video = document.getElementById('tavba-video');
-  if (!video.videoWidth || video.paused || video.ended) return null;
-
-  const canvas = document.getElementById('tavba-canvas');
-  // Skenuj iba stred (rámik: 5%-95% šírky, 35%-65% výšky)
-  const sx = video.videoWidth  * 0.05;
-  const sy = video.videoHeight * 0.35;
-  const sw = video.videoWidth  * 0.90;
-  const sh = video.videoHeight * 0.30;
-
-  canvas.width  = sw;
-  canvas.height = sh;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
-
-  // 1. Skús BarcodeDetector (natívne, rýchle, presné)
-  if ('BarcodeDetector' in window) {
-    try {
-      const detector = new BarcodeDetector({ formats: ['qr_code','code_128','code_39','code_93','ean_13','ean_8','data_matrix'] });
-      const barcodes = await detector.detect(canvas);
-      if (barcodes.length) return barcodes[0].rawValue.toUpperCase().trim();
-    } catch(e) {}
-  }
-
-  // 2. Fallback: OCR cez zvýšený kontrast + hľadanie tavby v texte
-  // Zvýš kontrast pre lepšie OCR malých čísel
-  const ctx2 = canvas.getContext('2d');
-  const imgData = ctx2.getImageData(0, 0, canvas.width, canvas.height);
-  const d = imgData.data;
-  for (let i = 0; i < d.length; i += 4) {
-    // Grayscale + vysoký kontrast
-    const avg = (d[i] + d[i+1] + d[i+2]) / 3;
-    const v = avg > 140 ? 255 : 0; // prahovanie
-    d[i] = d[i+1] = d[i+2] = v;
-  }
-  ctx2.putImageData(imgData, 0, 0);
-
-  if (typeof Tesseract !== 'undefined') {
-    try {
-      const r = await Tesseract.recognize(canvas, 'eng', {
-        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/',
-        tessedit_pageseg_mode: '7' // single line
-      });
-      const text = (r.data.text || '').toUpperCase();
-      // Hľadaj tokeny ktoré sú v sklade
-      const tokens = [...new Set((text.match(/[A-Z0-9][A-Z0-9\-\/]{3,14}/g)||[]).map(t=>t.replace(/^[-\/]+|[-\/]+$/g,'')))] ;
-      for (const tok of tokens) {
-        if (searchTavbaInItems(tok).length) return tok;
-      }
-      // Ak nič nenajde v sklade, vráť najdlhší token
-      if (tokens.length) return tokens.sort((a,b)=>b.length-a.length)[0];
-    } catch(e) {}
-  }
-
-  return null;
+    if (matchedTok && matchedTok !== _tavbaLastResult) {
+      _tavbaLastResult = matchedTok;
+      document.getElementById('tavba-manual-inp').value = matchedTok;
+      renderTavbaResults(matchedTok, matchedItems);
+      document.getElementById('tavba-scan-status').innerHTML =
+        '<span style="background:rgba(39,174,96,0.85);color:#fff;font-size:12px;padding:4px 14px;border-radius:20px">✅ Nájdená: ' + matchedTok + ' (' + matchedItems.length + ' zhôd)</span>';
+      // Bliknutie čiary
+      var line = document.getElementById('scan-line');
+      if (line) { line.style.background='#27ae60'; setTimeout(function(){if(line)line.style.background='rgba(79,124,255,0.8)';},600); }
+    } else if (!matchedTok) {
+      // Zobraz čo prečítal
+      document.getElementById('tavba-scan-status').innerHTML =
+        '<span style="background:rgba(0,0,0,0.6);color:#f59e0b;font-size:11px;padding:4px 14px;border-radius:20px">👁 ' + tokens.slice(0,3).join(' · ') + '</span>';
+    }
+  } catch(e) {}
 }
 
 function searchTavba(q) {
   q = (q||'').toUpperCase().trim();
   if (!q) return;
-  const matches = searchTavbaInItems(q);
-  renderTavbaResults(q, matches);
-  // Aktualizuj status
-  const statusEl = document.getElementById('tavba-scan-status');
-  if (statusEl) {
-    statusEl.innerHTML = matches.length
-      ? `<span style="background:rgba(39,174,96,0.85);color:#fff;font-size:12px;padding:4px 14px;border-radius:20px">✓ Nájdená: ${q} (${matches.length} zhôd)</span>`
-      : `<span style="background:rgba(200,50,50,0.7);color:#fff;font-size:12px;padding:4px 14px;border-radius:20px">Tavba "${q}" nie je v sklade</span>`;
-  }
+  renderTavbaResults(q, searchTavbaInItems(q));
 }
 
 function searchTavbaInItems(q) {
   return items
-    .map((it, idx) => ({ it, idx }))
-    .filter(({ it }) => (it.tavba||'').toUpperCase().includes(q) && parseFloat(it.zostatok) > 0);
+    .map(function(it, idx) { return { it: it, idx: idx }; })
+    .filter(function(r) { return (r.it.tavba||'').toUpperCase().includes(q) && parseFloat(r.it.zostatok) > 0; });
 }
 
 function renderTavbaResults(q, matches) {
-  const el = document.getElementById('tavba-results');
+  var el = document.getElementById('tavba-results');
   if (!matches.length) {
-    el.innerHTML = `<div style="padding:12px;text-align:center;color:#aaa;font-size:12px">
-      Tavba <strong style="font-family:monospace;color:#333">${q}</strong> nie je v sklade.</div>`;
+    el.innerHTML = '<div style="padding:12px;text-align:center;color:#aaa;font-size:12px">Tavba <strong style="font-family:monospace;color:#333">' + q + '</strong> nie je v sklade.</div>';
     return;
   }
-  el.innerHTML = `<div style="padding:4px 0 8px;font-size:12px;color:#555;font-weight:600">
-    <span style="font-family:monospace;color:#1a5fa8">${q}</span> — ${matches.length} zhoda/zhôd:</div>` +
-  matches.map(({ it, idx }) => {
-    const q2 = parseFloat(it.zostatok)||0;
-    const qStr = it.jednotka==='m' ? q2.toFixed(2)+' m' : q2+' ks';
-    const qColor = q2<=0?'#e74c3c':q2<3?'#e67e22':'#27ae60';
-    return `<div style="border:1px solid #dde1e7;border-radius:6px;padding:8px 12px;margin-bottom:6px;background:#fff;display:flex;align-items:center;gap:10px">
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:6px">
-          <span class="badge badge-${typClass(it.typ)}">${shortType(it.typ)}</span>
-          <strong style="font-family:monospace;font-size:13px">${it.rozmer}</strong>
-          <span style="font-size:11px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${it.material||''}</span>
-          <span style="margin-left:auto;font-weight:700;color:${qColor};white-space:nowrap">${qStr}</span>
-        </div>
-        <div style="font-size:10px;color:#aaa;margin-top:2px">${it.typ}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        <input id="tavba-qty-${idx}" type="number" min="1" step="1" value="1"
-          style="width:52px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:13px;font-family:monospace;text-align:center">
-        <button onclick="addFromTavbaScanner(${idx})"
-          style="padding:6px 12px;background:#27ae60;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap">
-          + Pridať
-        </button>
-      </div>
-    </div>`;
+  el.innerHTML = '<div style="padding:4px 0 8px;font-size:12px;color:#555;font-weight:600"><span style="font-family:monospace;color:#1a5fa8">' + q + '</span> — ' + matches.length + ' zhôd:</div>' +
+  matches.map(function(r) {
+    var it = r.it; var idx = r.idx;
+    var q2 = parseFloat(it.zostatok)||0;
+    var qStr = it.jednotka==='m' ? q2.toFixed(2)+' m' : q2+' ks';
+    var qColor = q2<=0?'#e74c3c':q2<3?'#e67e22':'#27ae60';
+    return '<div style="border:1px solid #dde1e7;border-radius:6px;padding:8px 12px;margin-bottom:6px;background:#fff;display:flex;align-items:center;gap:10px">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="display:flex;align-items:center;gap:6px">' +
+          '<span class="badge badge-' + typClass(it.typ) + '">' + shortType(it.typ) + '</span>' +
+          '<strong style="font-family:monospace;font-size:13px">' + it.rozmer + '</strong>' +
+          '<span style="font-size:11px;color:#888">' + (it.material||'') + '</span>' +
+          '<span style="margin-left:auto;font-weight:700;color:' + qColor + ';white-space:nowrap">' + qStr + '</span>' +
+        '</div>' +
+        '<div style="font-size:10px;color:#aaa;margin-top:2px">' + it.typ + '</div>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
+        '<input id="tavba-qty-' + idx + '" type="number" min="1" step="1" value="1" style="width:52px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:13px;text-align:center">' +
+        '<button onclick="addFromTavbaScanner(' + idx + ')" style="padding:6px 12px;background:#27ae60;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;font-weight:700">+ Pridať</button>' +
+      '</div>' +
+    '</div>';
   }).join('');
 }
 
 function addFromTavbaScanner(itemIdx) {
-  const qtyInp = document.getElementById(`tavba-qty-${itemIdx}`);
-  const qty = parseInt(qtyInp?.value) || 1;
-  const it = items[itemIdx];
+  var qtyInp = document.getElementById('tavba-qty-' + itemIdx);
+  var qty = parseInt(qtyInp ? qtyInp.value : 1) || 1;
+  var it = items[itemIdx];
   if (!it) return;
 
-  const existing = vydLines.findIndex(l => l.itemIdx === itemIdx);
+  var existing = vydLines.findIndex(function(l){ return l.itemIdx === itemIdx; });
   if (existing >= 0) {
     vydLines[existing].vydQty = (parseFloat(vydLines[existing].vydQty)||0) + qty;
-    const inp = document.querySelector(`#vyd-lines-tbody tr[data-idx="${existing}"] .inp-qty`);
+    var inp = document.querySelector('#vyd-lines-tbody tr[data-idx="' + existing + '"] .inp-qty');
     if (inp) inp.value = vydLines[existing].vydQty;
   } else {
     vydLines.push({
-      itemIdx, typ: it.typ, rozmer: it.rozmer, material: it.material,
+      itemIdx: itemIdx, typ: it.typ, rozmer: it.rozmer, material: it.material,
       norma: it.norma, tavba: it.tavba, jednotka: it.jednotka,
       stockMax: parseFloat(it.zostatok)||0,
       vydQty: qty, dlzka: '', spCislo: '',
       isPipe: (it.typ||'').toLowerCase().includes('pipe'),
     });
-    const panel = document.getElementById('vyd-lines-panel');
+    var panel = document.getElementById('vyd-lines-panel');
     panel.style.display = 'flex'; panel.style.flexDirection = 'column';
     appendVydRow(vydLines.length - 1);
     updateHasPipeCols();
   }
   updateVydCount();
 
-  // Vizuálna spätná väzba
-  const btn = document.querySelector(`button[onclick="addFromTavbaScanner(${itemIdx})"]`);
-  if (btn) { const orig = btn.textContent; btn.textContent = '✓'; btn.style.background='#1a5fa8'; setTimeout(()=>{btn.textContent=orig;btn.style.background='#27ae60';},1200); }
+  // Spätná väzba
+  var btn = document.querySelector('button[onclick="addFromTavbaScanner(' + itemIdx + ')"]');
+  if (btn) { var orig = btn.textContent; btn.textContent = '✓'; btn.style.background='#1a5fa8'; setTimeout(function(){btn.textContent=orig;btn.style.background='#27ae60';},1200); }
 }
 </script>
 </body>
