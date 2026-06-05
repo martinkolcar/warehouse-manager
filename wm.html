@@ -1084,37 +1084,58 @@ function closeVydajka() {
 
 // ─── ISO LIST (ľavý panel) ────────────────────
 function renderIsoList(q) {
-  const sec = document.getElementById('vyd-sec-sel').value;
-  const ql = (q||'').toLowerCase().trim();
-  const el = document.getElementById('vyd-iso-list');
+  var sec = document.getElementById('vyd-sec-sel').value;
+  var ql = (q||'').toLowerCase().trim();
+  var el = document.getElementById('vyd-iso-list');
 
-  // Zbier všetky izometrie
-  let all = [];
-  Object.entries(ISOS).forEach(([s, list]) => {
-    if (sec && s !== sec) return;
-    list.forEach(iso => all.push({ sec: s, iso }));
+  // Načítaj izometrie z Firebase pre aktuálny projekt
+  var isoSource = window._projectIsos || [];
+
+  if (!isoSource.length) {
+    // Skús načítať
+    if (_currentProject && window._fbReady) {
+      el.innerHTML = '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">⏳ Načítavam...</div>';
+      window.db.ref('projects/' + _currentProject.id + '/isometries').once('value', function(snap) {
+        var val = snap.val() || {};
+        window._projectIsos = Object.values(val).sort();
+        renderIsoList(q);
+      });
+      return;
+    } else {
+      // Fallback na statické ISOS
+      Object.values(ISOS).forEach(function(arr) { arr.forEach(function(iso){ isoSource.push(iso); }); });
+    }
+  }
+
+  // Filtruj podľa sekcie (sekcia = prvá časť názvu pred '-')
+  var filtered = isoSource.filter(function(iso) {
+    if (sec) {
+      // Skús nájsť sekciu v názve
+      var parts = iso.split('-');
+      if (parts.length >= 2) {
+        // Sekcia je zvyčajne v časti ako SUL, FLA, LIG atď.
+        if (!iso.toUpperCase().includes(sec.toUpperCase()) &&
+            !Object.keys(ISOS).some(function(s){ return s===sec && ISOS[s].includes(iso); })) return false;
+      }
+    }
+    if (ql && !iso.toLowerCase().includes(ql)) return false;
+    return true;
   });
-
-  // Filter
-  const filtered = ql
-    ? all.filter(r => r.iso.toLowerCase().includes(ql))
-    : (ql === '' && !sec ? [] : all);
 
   if (!filtered.length) {
     el.innerHTML = ql || sec
       ? '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">Žiadne výsledky</div>'
-      : '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">Zadajte hľadaný text alebo vyberte sekciu</div>';
+      : '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">Zadajte hľadaný text</div>';
     return;
   }
 
-  el.innerHTML = filtered.slice(0, 200).map(r => {
-    const esc = r.iso.replace(/'/g, "\\'");
-    const active = vydIso === r.iso ? ' active' : '';
-    const highlight = ql ? r.iso.replace(new RegExp(`(${ql.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi'), '<mark style="background:#fff3b0;border-radius:2px">$1</mark>') : r.iso;
-    return `<div class="vyd-iso-item${active}" onclick="selectVydIso('${esc}','${r.sec}')">
-      <span class="vyd-iso-name">${highlight}</span>
-      <span class="vyd-sec-tag">${r.sec}</span>
-    </div>`;
+  el.innerHTML = filtered.slice(0, 300).map(function(iso) {
+    var esc = iso.replace(/'/g, "\\'");
+    var active = vydIso === iso ? ' active' : '';
+    var highlighted = ql ? iso.replace(new RegExp('(' + ql.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi'), '<mark style="background:#fff3b0;border-radius:2px">$1</mark>') : iso;
+    return '<div class="vyd-iso-item' + active + '" onclick="selectVydIso(\'' + esc + '\',\'\')">' +
+      '<span class="vyd-iso-name">' + highlighted + '</span>' +
+      '</div>';
   }).join('');
 }
 
@@ -2049,20 +2070,29 @@ function addFromTavbaScanner(itemIdx) {
 <!-- ═══════════════════════════════════════════════════════ -->
 <!-- LOGIN SCREEN -->
 <div id="login-screen" style="display:none;position:fixed;inset:0;background:#0f1729;z-index:9000;align-items:center;justify-content:center;flex-direction:column">
-  <div style="text-align:center;margin-bottom:32px">
-    <h1 style="color:#fff;font-size:28px;font-weight:700;letter-spacing:0.04em">Warehouse <span style="color:#4f7cff">Manager</span></h1>
-    <div style="color:#9a9bb0;font-size:13px;margin-top:6px">Prihlásenie do systému</div>
+  <!-- Jazyky -->
+  <div style="position:absolute;top:18px;right:18px;display:flex;gap:4px;background:rgba(255,255,255,0.06);border-radius:8px;padding:4px">
+    <button onclick="setLang('sk')" id="langBtn_sk" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:5px;opacity:1" title="Slovenčina">🇸🇰</button>
+    <button onclick="setLang('en')" id="langBtn_en" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:5px;opacity:0.45" title="English">🇬🇧</button>
+    <button onclick="setLang('de')" id="langBtn_de" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:5px;opacity:0.45" title="Deutsch">🇩🇪</button>
+    <button onclick="setLang('uk')" id="langBtn_uk" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:5px;opacity:0.45" title="Українська">🇺🇦</button>
   </div>
+  <!-- Logo -->
+  <div style="text-align:center;margin-bottom:32px">
+    <h1 style="color:#fff;font-size:30px;font-weight:700;letter-spacing:0.04em">Warehouse <span style="color:#4f7cff">Manager</span></h1>
+    <div id="login-subtitle" style="color:#9a9bb0;font-size:13px;margin-top:6px">Prihlásenie do systému</div>
+  </div>
+  <!-- Formulár -->
   <div style="background:#1a2540;border-radius:12px;padding:32px;width:340px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,0.4)">
     <div style="margin-bottom:18px">
-      <label style="font-size:12px;color:#9a9bb0;display:block;margin-bottom:6px">EMAIL</label>
-      <input id="login-email" type="email" placeholder="meno@firma.sk" autocomplete="username"
+      <label id="login-label-name" style="font-size:11px;color:#9a9bb0;display:block;margin-bottom:6px;letter-spacing:0.08em">MENO</label>
+      <input id="login-name" type="text" placeholder="Martin Kolcar" autocomplete="username" autocapitalize="words"
         style="width:100%;padding:11px 14px;background:#0f1729;border:1px solid #2a3a5c;border-radius:7px;color:#fff;font-size:14px;outline:none"
         onfocus="this.style.borderColor='#4f7cff'" onblur="this.style.borderColor='#2a3a5c'"
         onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()">
     </div>
     <div style="margin-bottom:24px">
-      <label style="font-size:12px;color:#9a9bb0;display:block;margin-bottom:6px">HESLO</label>
+      <label id="login-label-pass" style="font-size:11px;color:#9a9bb0;display:block;margin-bottom:6px;letter-spacing:0.08em">HESLO</label>
       <input id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password"
         style="width:100%;padding:11px 14px;background:#0f1729;border:1px solid #2a3a5c;border-radius:7px;color:#fff;font-size:14px;outline:none"
         onfocus="this.style.borderColor='#4f7cff'" onblur="this.style.borderColor='#2a3a5c'"
@@ -2070,7 +2100,7 @@ function addFromTavbaScanner(itemIdx) {
     </div>
     <button onclick="doLogin()" id="login-btn"
       style="width:100%;padding:12px;background:#4f7cff;color:#fff;border:none;border-radius:7px;font-size:14px;font-weight:700;cursor:pointer;transition:background 0.15s">
-      Prihlásiť sa
+      <span id="login-btn-text">Prihlásiť sa</span>
     </button>
     <div id="login-err" style="display:none;margin-top:14px;padding:10px 14px;background:rgba(231,76,60,0.15);border:1px solid rgba(231,76,60,0.3);border-radius:6px;color:#e74c3c;font-size:12px;text-align:center"></div>
   </div>
@@ -2100,6 +2130,7 @@ function addFromTavbaScanner(itemIdx) {
     <div style="display:flex;border-bottom:1px solid #e4e8ef;flex-shrink:0">
       <button class="admin-tab active" id="tab-projects" onclick="switchAdminTab('projects')" style="padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:#4f7cff;border-bottom:2px solid #4f7cff">Projekty</button>
       <button class="admin-tab" id="tab-users" onclick="switchAdminTab('users')" style="padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;color:#666;border-bottom:2px solid transparent">Používatelia</button>
+      <button class="admin-tab" id="tab-isos" onclick="switchAdminTab('isos')" style="padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;color:#666;border-bottom:2px solid transparent">Izometrie</button>
     </div>
     <div id="admin-body" style="flex:1;overflow-y:auto;padding:18px"></div>
   </div>
@@ -2117,11 +2148,30 @@ function addFromTavbaScanner(itemIdx) {
 </style>
 
 <script>
-// ═══════════════════════════ AUTH + PROJEKTY ═══════════════════════════
+// ═══════════════════════════ JAZYKY ═══════════════════════════
+const LANGS = {
+  sk: { subtitle:'Prihlásenie do systému', name:'MENO', pass:'HESLO', login:'Prihlásiť sa', logging:'...', errWrong:'Nesprávne meno alebo heslo', errEmpty:'Zadajte meno a heslo', online:'online', admin:'Admin', logout:'Odhlásiť sa', switchProj:'Prepnúť projekt', projects:'Projekty', users:'Používatelia', newProj:'+ Nový projekt', projName:'Názov projektu', projDesc:'Popis (voliteľné)', create:'Vytvoriť', close:'Zavrieť', isos:'Izometrie', uploadPdf:'📄 Nahrať PDF izometrie', isoCount:'izometrií', noIsos:'Žiadne izometrie.', deleteProj:'Vymazať projekt' },
+  en: { subtitle:'Sign in to the system', name:'NAME', pass:'PASSWORD', login:'Sign in', logging:'...', errWrong:'Incorrect name or password', errEmpty:'Enter name and password', online:'online', admin:'Admin', logout:'Sign out', switchProj:'Switch project', projects:'Projects', users:'Users', newProj:'+ New project', projName:'Project name', projDesc:'Description (optional)', create:'Create', close:'Close', isos:'Isometries', uploadPdf:'📄 Upload PDF isometries', isoCount:'isometries', noIsos:'No isometries.', deleteProj:'Delete project' },
+  de: { subtitle:'Anmeldung am System', name:'NAME', pass:'PASSWORT', login:'Anmelden', logging:'...', errWrong:'Falscher Name oder Passwort', errEmpty:'Name und Passwort eingeben', online:'online', admin:'Admin', logout:'Abmelden', switchProj:'Projekt wechseln', projects:'Projekte', users:'Benutzer', newProj:'+ Neues Projekt', projName:'Projektname', projDesc:'Beschreibung (optional)', create:'Erstellen', close:'Schließen', isos:'Isometrien', uploadPdf:'📄 PDF-Isometrien hochladen', isoCount:'Isometrien', noIsos:'Keine Isometrien.', deleteProj:'Projekt löschen' },
+  uk: { subtitle:'Вхід до системи', name:'ІМЯ', pass:'ПАРОЛЬ', login:'Увійти', logging:'...', errWrong:'Невірне імя або пароль', errEmpty:'Введіть імя та пароль', online:'онлайн', admin:'Адмін', logout:'Вийти', switchProj:'Змінити проект', projects:'Проекти', users:'Користувачі', newProj:'+ Новий проект', projName:'Назва проекту', projDesc:'Опис', create:'Створити', close:'Закрити', isos:'Ізометрії', uploadPdf:'PDF ізометрії', isoCount:'ізометрій', noIsos:'Немає ізометрій.', deleteProj:'Видалити проект' }
+};
+var _lang = localStorage.getItem('wmLang') || 'sk';
+function t(k){ return (LANGS[_lang]||LANGS.sk)[k]||k; }
+function setLang(l){
+  _lang = l; localStorage.setItem('wmLang', l);
+  ['sk','en','de','uk'].forEach(function(x){
+    var b=document.getElementById('langBtn_'+x);
+    if(b) b.style.opacity = x===l ? '1' : '0.4';
+  });
+  applyLangLogin();
+}
+function applyLangLogin(){
+  var s=document.getElementById('login-subtitle'); if(s) s.textContent=t('subtitle');
+  var n=document.getElementById('login-label-name'); if(n) n.textContent=t('name');
+  var p=document.getElementById('login-label-pass'); if(p) p.textContent=t('pass');
+  var b=document.getElementById('login-btn-text'); if(b) b.textContent=t('login');
+}
 
-// Používatelia (uložení v Firebase /users)
-// Martin = admin, Isabel = user
-const ADMIN_EMAIL = 'martinkolcar@iso.sk';
 
 var _currentUser = null;   // { uid, email, name, role, projects[] }
 var _currentProject = null; // { id, name }
@@ -2130,6 +2180,8 @@ var _heartbeatTimer = null;
 // ─── Firebase init ────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', function() {
   document.getElementById('login-screen').style.display = 'flex';
+  applyLangLogin();
+  setLang(_lang);
 
   try {
     firebase.initializeApp({
@@ -2180,26 +2232,40 @@ window.addEventListener('DOMContentLoaded', function() {
 
 // ─── Login ─────────────────────────────────────────────────────────────
 function doLogin() {
-  var email = document.getElementById('login-email').value.trim().toLowerCase();
+  var name = (document.getElementById('login-name').value||'').trim();
   var pass  = document.getElementById('login-pass').value;
-  var err   = document.getElementById('login-err');
-  var btn   = document.getElementById('login-btn');
-  if (!email || !pass) { showLoginErr('Zadajte email a heslo'); return; }
-  btn.textContent = '...';
-  btn.disabled = true;
-  err.style.display = 'none';
-  window.auth.signInWithEmailAndPassword(email, pass)
-    .catch(function(e) {
-      btn.textContent = 'Prihlásiť sa'; btn.disabled = false;
-      showLoginErr('Nesprávny email alebo heslo');
+  var btn   = document.getElementById('login-btn-text');
+  if (!name || !pass) { showLoginErr(t('errEmpty')); return; }
+  btn.textContent = t('logging');
+  document.getElementById('login-btn').disabled = true;
+  document.getElementById('login-err').style.display = 'none';
+
+  // Nájdi používateľa podľa mena v DB (case-insensitive)
+  window.db.ref('users').once('value').then(function(snap) {
+    var users = snap.val() || {};
+    var found = null;
+    Object.entries(users).forEach(function(e) {
+      var u = e[1];
+      if ((u.name||'').toLowerCase() === name.toLowerCase() ||
+          (u.name||'').toLowerCase().startsWith(name.toLowerCase())) {
+        found = { uid: e[0], ...u };
+      }
     });
+    if (!found) { showLoginErr(t('errWrong')); return; }
+
+    // Prihlás cez Firebase Auth s emailom
+    window.auth.signInWithEmailAndPassword(found.email, pass)
+      .catch(function() { showLoginErr(t('errWrong')); });
+  }).catch(function() { showLoginErr(t('errWrong')); });
 }
 
 function showLoginErr(msg) {
   var el = document.getElementById('login-err');
   el.textContent = msg; el.style.display = 'block';
   var btn = document.getElementById('login-btn');
-  btn.textContent = 'Prihlásiť sa'; btn.disabled = false;
+  var btxt = document.getElementById('login-btn-text');
+  if(btxt) btxt.textContent = t('login');
+  btn.disabled = false;
 }
 
 function doLogout() {
@@ -2363,10 +2429,10 @@ function closeProjectSwitch() {
 
 function selectProject(proj) {
   _currentProject = proj;
+  window._projectIsos = []; // reset izometrií
   closeProjectSwitch();
   document.getElementById('project-badge').style.display = 'flex';
   document.getElementById('project-badge-name').textContent = proj.name;
-  // Aktualizuj heartbeat
   if (window._fbReady && _currentUser) {
     window.db.ref('online/' + _currentUser.uid + '/project').set(proj.id);
   }
@@ -2384,16 +2450,91 @@ function openAdminPanel() {
 }
 
 function switchAdminTab(tab) {
-  document.getElementById('tab-projects').className = 'admin-tab' + (tab==='projects'?' active':'');
-  document.getElementById('tab-users').className    = 'admin-tab' + (tab==='users'?' active':'');
-  document.getElementById('tab-projects').style.cssText = tab==='projects'
-    ? 'padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:#4f7cff;border-bottom:2px solid #4f7cff'
-    : 'padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;color:#666;border-bottom:2px solid transparent';
-  document.getElementById('tab-users').style.cssText = tab==='users'
-    ? 'padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:#4f7cff;border-bottom:2px solid #4f7cff'
-    : 'padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;color:#666;border-bottom:2px solid transparent';
-  if (tab === 'projects') renderAdminProjects();
-  else renderAdminUsers();
+  ['projects','users','isos'].forEach(function(t) {
+    var el = document.getElementById('tab-'+t);
+    if (!el) return;
+    el.style.cssText = 'padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;border-bottom:2px solid ' +
+      (t===tab ? '#4f7cff;color:#4f7cff;font-weight:600' : 'transparent;color:#666');
+  });
+  if (tab==='projects') renderAdminProjects();
+  else if (tab==='users') renderAdminUsers();
+  else renderAdminIsos();
+}
+
+function renderAdminIsos() {
+  var body = document.getElementById('admin-body');
+  if (!_currentProject) { body.innerHTML='<div style="padding:20px;color:#aaa">Najprv vyberte projekt.</div>'; return; }
+  body.innerHTML = '<div style="color:#aaa;font-size:12px;padding:10px">Načítavam...</div>';
+
+  window.db.ref('projects/' + _currentProject.id + '/isometries').once('value', function(snap) {
+    var isos = snap.val() || {};
+    var list = Object.values(isos).sort();
+    var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">' +
+      '<span style="font-weight:700;font-size:14px">Izometrie pre projekt: <span style="color:#4f7cff">' + _currentProject.name + '</span></span>' +
+      '<div style="display:flex;gap:8px;align-items:center">' +
+      '<span style="font-size:12px;color:#888">' + list.length + ' izometrií</span>' +
+      '<div style="position:relative">' +
+      '<button class="btn" style="background:#4f7cff;color:#fff;padding:7px 14px;font-size:13px">📄 Nahrať PDF izometrie</button>' +
+      '<input type="file" accept=".pdf" multiple onchange="importIsoFromPdf(event)" style="position:absolute;inset:0;opacity:0;cursor:pointer">' +
+      '</div>' +
+      '<button onclick="clearAllIsos()" style="padding:7px 14px;border:1px solid #e74c3c;color:#e74c3c;background:none;border-radius:5px;cursor:pointer;font-size:12px">🗑 Vymazať všetky</button>' +
+      '</div></div>';
+
+    if (!list.length) {
+      html += '<div style="text-align:center;padding:30px;color:#aaa;font-size:13px;border:2px dashed #e4e8ef;border-radius:8px">Žiadne izometrie. Nahrajte PDF súbory — názov súboru = názov izometrie.</div>';
+    } else {
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:6px;max-height:400px;overflow-y:auto;padding:4px">';
+      list.forEach(function(iso) {
+        html += '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #e4e8ef;border-radius:6px;font-family:monospace;font-size:11px;background:#f7f8fa">' +
+          '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + iso + '</span>' +
+          '<button onclick="deleteIso(\'' + iso.replace(/'/g,"\\'") + '\')" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:14px;padding:0 2px;flex-shrink:0" title="Vymazať">✕</button>' +
+          '</div>';
+      });
+      html += '</div>';
+    }
+    body.innerHTML = html;
+  });
+}
+
+function importIsoFromPdf(e) {
+  var files = [...e.target.files];
+  if (!files.length || !_currentProject) return;
+  var base = 'projects/' + _currentProject.id + '/isometries';
+
+  window.db.ref(base).once('value', function(snap) {
+    var existing = snap.val() || {};
+    var obj = Object.assign({}, existing);
+    var added = 0;
+
+    files.forEach(function(f) {
+      // Vezmi iba názov bez prípony .pdf
+      var name = f.name.replace(/\.pdf$/i, '').trim();
+      if (!name) return;
+      // Kľúč = name bez špeciálnych znakov (Firebase key)
+      var key = name.replace(/[.#$[\]/]/g, '_');
+      obj[key] = name;
+      added++;
+    });
+
+    window.db.ref(base).set(obj, function() {
+      renderAdminIsos();
+      setStatus('✓ Pridaných ' + added + ' izometrií do projektu ' + _currentProject.name, 'ok');
+    });
+  });
+  e.target.value = '';
+}
+
+function deleteIso(name) {
+  if (!_currentProject) return;
+  var base = 'projects/' + _currentProject.id + '/isometries';
+  var key = name.replace(/[.#$[\]/]/g, '_');
+  window.db.ref(base + '/' + key).remove(function() { renderAdminIsos(); });
+}
+
+function clearAllIsos() {
+  if (!_currentProject) return;
+  if (!confirm('Vymazať všetky izometrie projektu ' + _currentProject.name + '?')) return;
+  window.db.ref('projects/' + _currentProject.id + '/isometries').remove(function() { renderAdminIsos(); });
 }
 
 function renderAdminProjects() {
