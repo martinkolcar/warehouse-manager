@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sklad — PMP Montex</title>
+<title>Warehouse Manager</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-database-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-auth-compat.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: Arial, sans-serif; background: #f0f2f5; color: #1a1a2e; font-size: 14px; }
@@ -255,13 +255,35 @@ table.main td.center { text-align: center; }
 <body>
 
 <header>
-  <div>
-    <h1>Sklad <span>materiálu</span></h1>
-    <div class="sub">PMP Montex · v0.2</div>
+  <div style="display:flex;align-items:center;gap:14px">
+    <div>
+      <h1>Warehouse <span>Manager</span></h1>
+    </div>
+    <!-- Projekt badge -->
+    <div id="project-badge" style="display:none;background:rgba(79,124,255,0.15);border:1px solid #4f7cff;border-radius:6px;padding:4px 12px;cursor:pointer" onclick="openProjectSwitch()" title="Prepnúť projekt">
+      <span style="font-size:10px;color:#9a9bb0;display:block;line-height:1">PROJEKT</span>
+      <span id="project-badge-name" style="font-size:13px;font-weight:700;color:#e0e8ff"></span>
+    </div>
   </div>
   <div style="flex:1"></div>
+  <!-- Online používatelia -->
+  <div id="online-bar" style="display:none;align-items:center;gap:6px;margin-right:16px"></div>
   <button class="btn" style="background:#4f7cff;color:#fff;font-size:13px;padding:9px 20px;border-radius:6px" onclick="openVydajkaWindow()">📋 Nová výdajka</button>
   <span id="sync-status" style="font-size:11px;margin-left:10px;color:#f59e0b">⏳ Pripájam...</span>
+  <!-- User menu -->
+  <div id="user-menu-wrap" style="display:none;margin-left:14px;position:relative">
+    <button id="user-menu-btn" onclick="toggleUserMenu()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px">
+      <span id="user-avatar" style="width:24px;height:24px;background:#4f7cff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700"></span>
+      <span id="user-name-badge"></span>
+      <span style="font-size:10px">▾</span>
+    </button>
+    <div id="user-dropdown" style="display:none;position:absolute;right:0;top:calc(100% + 6px);background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.15);min-width:180px;z-index:999;overflow:hidden">
+      <div id="user-dropdown-name" style="padding:10px 14px;font-size:12px;color:#666;border-bottom:1px solid #eee"></div>
+      <button id="admin-btn" onclick="openAdminPanel();toggleUserMenu()" style="display:none;width:100%;text-align:left;padding:10px 14px;border:none;background:none;cursor:pointer;font-size:13px;color:#4f7cff">⚙️ Admin panel</button>
+      <button onclick="openProjectSwitch();toggleUserMenu()" style="width:100%;text-align:left;padding:10px 14px;border:none;background:none;cursor:pointer;font-size:13px;color:#1a1a2e">🔄 Prepnúť projekt</button>
+      <button onclick="doLogout()" style="width:100%;text-align:left;padding:10px 14px;border:none;background:none;cursor:pointer;font-size:13px;color:#e74c3c;border-top:1px solid #eee">↩ Odhlásiť sa</button>
+    </div>
+  </div>
 </header>
 
 <div class="toolbar">
@@ -385,84 +407,15 @@ table.main td.center { text-align: center; }
 </div>
 
 <script>
-// ─── DÁTA (Firebase + localStorage fallback) ───
+// ─── STATE ─────────────────────────────────────────────────────────────
 let items = [];
 let editIdx = null;
 let previewItems = [];
+let vydajkyList = [];
 
 function setSyncStatus(msg, color) {
   const el = document.getElementById('sync-status');
   if (el) { el.textContent = msg; el.style.color = color; }
-}
-
-function initFirebase() {
-  if (!window._fbReady) {
-    items = JSON.parse(localStorage.getItem('sklad_items') || '[]');
-    vydajkyList = JSON.parse(localStorage.getItem('vydajky') || '[]');
-    setSyncStatus('⚠ Offline', '#e74c3c');
-    render();
-    populateMainFilters();
-    return;
-  }
-  setSyncStatus('⏳ Pripájam...', '#f59e0b');
-  window._fbOn(window._fbRef('sklad'), snap => {
-    const fbData = snap.val() ? Object.values(snap.val()) : [];
-    const local  = JSON.parse(localStorage.getItem('sklad_items') || '[]');
-    // Ak Firebase prázdny ale localStorage má dáta → ponúknuť migráciu
-    if (fbData.length === 0 && local.length > 0) {
-      items = local;
-      document.getElementById('migrate-btn').style.display = 'inline-block';
-      setSyncStatus('☁ Online — lokálne dáta čakajú na prenos', '#f59e0b');
-    } else {
-      items = fbData;
-      document.getElementById('migrate-btn').style.display = 'none';
-      setSyncStatus('☁ Online', '#27ae60');
-    }
-    render();
-    populateMainFilters();
-  }, () => {
-    items = JSON.parse(localStorage.getItem('sklad_items') || '[]');
-    setSyncStatus('⚠ Offline', '#e74c3c');
-    render();
-  });
-  window._fbOn(window._fbRef('vydajky'), snap => {
-    const fbVyd   = snap.val() ? Object.values(snap.val()) : [];
-    const localVyd = JSON.parse(localStorage.getItem('vydajky') || '[]');
-    vydajkyList = fbVyd.length > 0 ? fbVyd : localVyd;
-  });
-}
-
-function migrateToFirebase() {
-  const local    = JSON.parse(localStorage.getItem('sklad_items') || '[]');
-  const localVyd = JSON.parse(localStorage.getItem('vydajky') || '[]');
-  if (!local.length && !localVyd.length) { alert('Nie sú žiadne lokálne dáta.'); return; }
-  if (!confirm(`Preniesť ${local.length} položiek skladu a ${localVyd.length} výdajok do Firebase?\nPo prenose budú viditeľné na všetkých zariadeniach.`)) return;
-
-  items = local;
-  vydajkyList = localVyd;
-  save();
-  saveVydajkyFb();
-  document.getElementById('migrate-btn').style.display = 'none';
-  setSyncStatus('☁ Online', '#27ae60');
-  setStatus(`✓ Prenesených ${local.length} položiek a ${localVyd.length} výdajok do Firebase.`, 'ok');
-}
-
-function save() {
-  if (!window._fbReady) { localStorage.setItem('sklad_items', JSON.stringify(items)); return; }
-  const obj = {};
-  items.forEach((it, i) => { obj[i] = it; });
-  window._fbSet(window._fbRef('sklad'), obj).catch(() => {
-    localStorage.setItem('sklad_items', JSON.stringify(items));
-  });
-}
-
-function saveVydajkyFb() {
-  if (!window._fbReady) { localStorage.setItem('vydajky', JSON.stringify(vydajkyList)); return; }
-  const obj = {};
-  vydajkyList.forEach((v, i) => { obj[i] = v; });
-  window._fbSet(window._fbRef('vydajky'), obj).catch(() => {
-    localStorage.setItem('vydajky', JSON.stringify(vydajkyList));
-  });
 }
 
 // ─── RENDER TABUĽKY ───────────────────────────
@@ -915,30 +868,6 @@ function setStatus(msg, type) {
 document.getElementById('modal').addEventListener('click', function(e) {
   if (e.target === this) closeModal();
 });
-
-// Init — dynamicky načítaj Firebase a spusti
-window.addEventListener('DOMContentLoaded', function() {
-  try {
-    firebase.initializeApp({
-      apiKey: "AIzaSyD7lqAVEY3-UZAWu-q2o_6YkOkTyyV4tOA",
-      authDomain: "warehouse-montex.firebaseapp.com",
-      databaseURL: "https://warehouse-montex-default-rtdb.europe-west1.firebasedatabase.app",
-      projectId: "warehouse-montex",
-      storageBucket: "warehouse-montex.firebasestorage.app",
-      messagingSenderId: "1071159413037",
-      appId: "1:1071159413037:web:93ffc2eb346b781c5b2ba4"
-    });
-    const db = firebase.database();
-    window._fbRef  = (path) => db.ref(path);
-    window._fbSet  = (ref, val) => ref.set(val);
-    window._fbOn   = (ref, cb, err) => ref.on('value', cb, err);
-    window._fbReady = true;
-  } catch(e) {
-    console.warn('Firebase init error:', e.message);
-    window._fbReady = false;
-  }
-  initFirebase();
-});
 </script>
 <div id="merge-info-overlay" class="merge-info-overlay">
   <div class="merge-info-box">
@@ -1057,11 +986,10 @@ const ISOS = {
 };
 
 // ─── VÝDAJKA STATE ────────────────────────────
-let vydajkyList = [];
 let vydLines = [];
 let vydIso = null;
 let vydIsoSec = null;
-let vydEditIdx = null;  // null = nová, číslo = editujeme existujúcu
+let vydEditIdx = null;
 
 function openVydajkaWindow() {
   vydEditIdx = null;
@@ -2092,5 +2020,533 @@ function addFromTavbaScanner(itemIdx) {
   if (btn) { var orig = btn.textContent; btn.textContent = '✓'; btn.style.background='#1a5fa8'; setTimeout(function(){btn.textContent=orig;btn.style.background='#27ae60';},1200); }
 }
 </script>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- LOGIN SCREEN -->
+<div id="login-screen" style="display:none;position:fixed;inset:0;background:#0f1729;z-index:9000;align-items:center;justify-content:center;flex-direction:column">
+  <div style="text-align:center;margin-bottom:32px">
+    <h1 style="color:#fff;font-size:28px;font-weight:700;letter-spacing:0.04em">Warehouse <span style="color:#4f7cff">Manager</span></h1>
+    <div style="color:#9a9bb0;font-size:13px;margin-top:6px">Prihlásenie do systému</div>
+  </div>
+  <div style="background:#1a2540;border-radius:12px;padding:32px;width:340px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,0.4)">
+    <div style="margin-bottom:18px">
+      <label style="font-size:12px;color:#9a9bb0;display:block;margin-bottom:6px">EMAIL</label>
+      <input id="login-email" type="email" placeholder="meno@firma.sk" autocomplete="username"
+        style="width:100%;padding:11px 14px;background:#0f1729;border:1px solid #2a3a5c;border-radius:7px;color:#fff;font-size:14px;outline:none"
+        onfocus="this.style.borderColor='#4f7cff'" onblur="this.style.borderColor='#2a3a5c'"
+        onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()">
+    </div>
+    <div style="margin-bottom:24px">
+      <label style="font-size:12px;color:#9a9bb0;display:block;margin-bottom:6px">HESLO</label>
+      <input id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password"
+        style="width:100%;padding:11px 14px;background:#0f1729;border:1px solid #2a3a5c;border-radius:7px;color:#fff;font-size:14px;outline:none"
+        onfocus="this.style.borderColor='#4f7cff'" onblur="this.style.borderColor='#2a3a5c'"
+        onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button onclick="doLogin()" id="login-btn"
+      style="width:100%;padding:12px;background:#4f7cff;color:#fff;border:none;border-radius:7px;font-size:14px;font-weight:700;cursor:pointer;transition:background 0.15s">
+      Prihlásiť sa
+    </button>
+    <div id="login-err" style="display:none;margin-top:14px;padding:10px 14px;background:rgba(231,76,60,0.15);border:1px solid rgba(231,76,60,0.3);border-radius:6px;color:#e74c3c;font-size:12px;text-align:center"></div>
+  </div>
+</div>
+
+<!-- PROJECT SWITCH MODAL -->
+<div id="project-switch-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:5000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;width:480px;max-width:94vw;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden">
+    <div style="background:#1a1a2e;color:#fff;padding:16px 20px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:15px;font-weight:700">🔄 Projekty</span>
+      <div style="flex:1"></div>
+      <button onclick="closeProjectSwitch()" style="background:none;border:1px solid #444;color:#aaa;padding:4px 12px;border-radius:5px;cursor:pointer">✕</button>
+    </div>
+    <div id="project-list-wrap" style="flex:1;overflow-y:auto;padding:16px"></div>
+  </div>
+</div>
+
+<!-- ADMIN PANEL MODAL -->
+<div id="admin-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:5000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;width:680px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden">
+    <div style="background:#1a1a2e;color:#fff;padding:16px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0">
+      <span style="font-size:15px;font-weight:700">⚙️ Admin panel</span>
+      <div style="flex:1"></div>
+      <button onclick="document.getElementById('admin-overlay').style.display='none'" style="background:none;border:1px solid #444;color:#aaa;padding:4px 12px;border-radius:5px;cursor:pointer">✕</button>
+    </div>
+    <!-- Tabs -->
+    <div style="display:flex;border-bottom:1px solid #e4e8ef;flex-shrink:0">
+      <button class="admin-tab active" id="tab-projects" onclick="switchAdminTab('projects')" style="padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:#4f7cff;border-bottom:2px solid #4f7cff">Projekty</button>
+      <button class="admin-tab" id="tab-users" onclick="switchAdminTab('users')" style="padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;color:#666;border-bottom:2px solid transparent">Používatelia</button>
+    </div>
+    <div id="admin-body" style="flex:1;overflow-y:auto;padding:18px"></div>
+  </div>
+</div>
+
+<style>
+#login-screen input::placeholder { color: #4a5a7c; }
+#login-btn:hover { background: #3d6aee; }
+.admin-tab.active { color: #4f7cff !important; border-bottom-color: #4f7cff !important; }
+.proj-card { border:1px solid #e4e8ef; border-radius:8px; padding:14px 16px; margin-bottom:10px; cursor:pointer; transition:all 0.15s; display:flex; align-items:center; gap:12px; }
+.proj-card:hover { border-color:#4f7cff; background:#f0f5ff; }
+.proj-card.active-proj { border-color:#27ae60; background:#f0fff8; }
+.proj-card.locked { opacity:0.5; cursor:not-allowed; }
+.online-dot { width:8px; height:8px; border-radius:50%; background:#27ae60; display:inline-block; }
+</style>
+
+<script>
+// ═══════════════════════════ AUTH + PROJEKTY ═══════════════════════════
+
+// Používatelia (uložení v Firebase /users)
+// Martin = admin, Isabel = user
+const ADMIN_EMAIL = 'martinkolcar@iso.sk';
+
+var _currentUser = null;   // { uid, email, name, role, projects[] }
+var _currentProject = null; // { id, name }
+var _heartbeatTimer = null;
+
+// ─── Firebase init ────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('login-screen').style.display = 'flex';
+
+  try {
+    firebase.initializeApp({
+      apiKey: "AIzaSyD7lqAVEY3-UZAWu-q2o_6YkOkTyyV4tOA",
+      authDomain: "warehouse-montex.firebaseapp.com",
+      databaseURL: "https://warehouse-montex-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "warehouse-montex",
+      storageBucket: "warehouse-montex.firebasestorage.app",
+      messagingSenderId: "1071159413037",
+      appId: "1:1071159413037:web:93ffc2eb346b781c5b2ba4"
+    });
+    window.db   = firebase.database();
+    window.auth = firebase.auth();
+    window._fbRef  = function(path){ return window.db.ref(path); };
+    window._fbSet  = function(ref,val){ return ref.set(val); };
+    window._fbOn   = function(ref,cb,err){ return ref.on('value',cb,err||function(){}); };
+    window._fbReady = true;
+  } catch(e) {
+    window._fbReady = false;
+  }
+
+  // Sleduj stav prihlásenia
+  if (window.auth) {
+    window.auth.onAuthStateChanged(function(user) {
+      if (user) {
+        // Načítaj profil z DB
+        window.db.ref('users/' + user.uid).once('value').then(function(snap) {
+          var profile = snap.val() || {};
+          _currentUser = {
+            uid: user.uid,
+            email: user.email,
+            name: profile.name || user.displayName || user.email,
+            role: profile.role || 'user',
+            projects: profile.projects || []
+          };
+          onLoginSuccess();
+        });
+      } else {
+        onLogout();
+      }
+    });
+  } else {
+    // Offline fallback
+    document.getElementById('login-screen').style.display = 'none';
+    initFirebase();
+  }
+});
+
+// ─── Login ─────────────────────────────────────────────────────────────
+function doLogin() {
+  var email = document.getElementById('login-email').value.trim().toLowerCase();
+  var pass  = document.getElementById('login-pass').value;
+  var err   = document.getElementById('login-err');
+  var btn   = document.getElementById('login-btn');
+  if (!email || !pass) { showLoginErr('Zadajte email a heslo'); return; }
+  btn.textContent = '...';
+  btn.disabled = true;
+  err.style.display = 'none';
+  window.auth.signInWithEmailAndPassword(email, pass)
+    .catch(function(e) {
+      btn.textContent = 'Prihlásiť sa'; btn.disabled = false;
+      showLoginErr('Nesprávny email alebo heslo');
+    });
+}
+
+function showLoginErr(msg) {
+  var el = document.getElementById('login-err');
+  el.textContent = msg; el.style.display = 'block';
+  var btn = document.getElementById('login-btn');
+  btn.textContent = 'Prihlásiť sa'; btn.disabled = false;
+}
+
+function doLogout() {
+  stopHeartbeat();
+  if (window.auth) window.auth.signOut();
+}
+
+// ─── Po prihlásení ──────────────────────────────────────────────────────
+function onLoginSuccess() {
+  document.getElementById('login-screen').style.display = 'none';
+
+  // User menu
+  var initials = (_currentUser.name || 'U').split(' ').map(function(w){return w[0];}).join('').toUpperCase().slice(0,2);
+  document.getElementById('user-avatar').textContent = initials;
+  document.getElementById('user-name-badge').textContent = (_currentUser.name||'').split(' ')[0];
+  document.getElementById('user-dropdown-name').textContent = _currentUser.name + ' · ' + (_currentUser.role === 'admin' ? 'Admin' : 'Používateľ');
+  document.getElementById('user-menu-wrap').style.display = 'block';
+  if (_currentUser.role === 'admin') document.getElementById('admin-btn').style.display = 'block';
+
+  // Heartbeat (online status)
+  startHeartbeat();
+
+  // Načítaj projekty a zobraz výber
+  loadProjectsAndShow();
+}
+
+function onLogout() {
+  _currentUser = null; _currentProject = null;
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-pass').value = '';
+  document.getElementById('login-err').style.display = 'none';
+  document.getElementById('login-btn').textContent = 'Prihlásiť sa';
+  document.getElementById('login-btn').disabled = false;
+  document.getElementById('user-menu-wrap').style.display = 'none';
+  document.getElementById('project-badge').style.display = 'none';
+  document.getElementById('online-bar').style.display = 'none';
+  items = []; vydajkyList = [];
+  render();
+}
+
+function toggleUserMenu() {
+  var d = document.getElementById('user-dropdown');
+  d.style.display = d.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', function(e) {
+  var wrap = document.getElementById('user-menu-wrap');
+  if (wrap && !wrap.contains(e.target)) document.getElementById('user-dropdown').style.display = 'none';
+});
+
+// ─── Heartbeat (online indikátor) ───────────────────────────────────────
+function startHeartbeat() {
+  if (!_currentUser || !window._fbReady) return;
+  var ref = window.db.ref('online/' + _currentUser.uid);
+  var data = { name: _currentUser.name, ts: Date.now(), project: _currentProject ? _currentProject.id : null };
+  ref.set(data);
+  ref.onDisconnect().remove();
+  _heartbeatTimer = setInterval(function() {
+    if (_currentProject) data.project = _currentProject.id;
+    data.ts = Date.now();
+    ref.set(data);
+  }, 30000);
+
+  // Sleduj online používateľov
+  window.db.ref('online').on('value', function(snap) {
+    var online = snap.val() || {};
+    renderOnlineBar(online);
+  });
+}
+
+function stopHeartbeat() {
+  if (_heartbeatTimer) { clearInterval(_heartbeatTimer); _heartbeatTimer = null; }
+  if (_currentUser && window._fbReady) window.db.ref('online/' + _currentUser.uid).remove();
+}
+
+function renderOnlineBar(online) {
+  var bar = document.getElementById('online-bar');
+  var users = Object.values(online).filter(function(u) { return Date.now() - u.ts < 90000; });
+  if (!users.length) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  bar.innerHTML = users.map(function(u) {
+    var initials = (u.name||'?').split(' ').map(function(w){return w[0];}).join('').toUpperCase().slice(0,2);
+    var isMe = _currentUser && u.name === _currentUser.name;
+    return '<div title="' + u.name + (u.project ? ' · ' + u.project : '') + '" style="width:28px;height:28px;border-radius:50%;background:' + (isMe?'#4f7cff':'#27ae60') + ';display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;border:2px solid rgba(255,255,255,0.3)" >' + initials + '</div>';
+  }).join('');
+  bar.style.gap = '4px';
+}
+
+// ─── Projekty ───────────────────────────────────────────────────────────
+function loadProjectsAndShow() {
+  if (!window._fbReady) { _currentProject = {id:'default',name:'Default'}; startApp(); return; }
+  window.db.ref('projects').once('value', function(snap) {
+    var projs = snap.val() || {};
+    // Admin vidí všetky, user len svoje
+    var myProjs = [];
+    Object.entries(projs).forEach(function(entry) {
+      var id = entry[0]; var p = entry[1];
+      if (_currentUser.role === 'admin' || (_currentUser.projects && _currentUser.projects.includes(id))) {
+        myProjs.push({ id: id, name: p.name });
+      }
+    });
+
+    if (!myProjs.length) {
+      // Žiadny projekt — admin vytvorí, user čaká
+      if (_currentUser.role === 'admin') {
+        openProjectSwitch();
+      } else {
+        document.getElementById('login-screen').style.display = 'flex';
+        document.getElementById('login-screen').innerHTML += '<div style="color:#f59e0b;margin-top:16px;font-size:13px">Nemáte pridelený žiadny projekt. Kontaktujte administrátora.</div>';
+      }
+      return;
+    }
+
+    if (myProjs.length === 1) {
+      selectProject(myProjs[0]);
+    } else {
+      openProjectSwitch();
+    }
+  });
+}
+
+function openProjectSwitch() {
+  var overlay = document.getElementById('project-switch-overlay');
+  overlay.style.display = 'flex';
+  var wrap = document.getElementById('project-list-wrap');
+  wrap.innerHTML = '<div style="color:#aaa;font-size:12px;text-align:center;padding:20px">Načítavam projekty…</div>';
+
+  window.db.ref('projects').once('value', function(snap) {
+    var projs = snap.val() || {};
+    var myProjs = [];
+    Object.entries(projs).forEach(function(entry) {
+      var id = entry[0]; var p = entry[1];
+      if (_currentUser.role === 'admin' || (_currentUser.projects && _currentUser.projects.includes(id))) {
+        myProjs.push({ id: id, name: p.name, desc: p.desc || '' });
+      }
+    });
+
+    if (!myProjs.length) {
+      wrap.innerHTML = _currentUser.role === 'admin'
+        ? '<div style="text-align:center;padding:20px;color:#aaa;font-size:13px">Žiadne projekty. Vytvorte prvý projekt v Admin paneli.</div>' +
+          '<div style="text-align:center;margin-top:10px"><button onclick="closeProjectSwitch();openAdminPanel()" style="padding:8px 20px;background:#4f7cff;color:#fff;border:none;border-radius:6px;cursor:pointer">⚙️ Admin panel</button></div>'
+        : '<div style="text-align:center;padding:20px;color:#aaa;font-size:13px">Nemáte pridelený žiadny projekt. Kontaktujte administrátora.</div>';
+      return;
+    }
+
+    wrap.innerHTML = myProjs.map(function(p) {
+      var isActive = _currentProject && _currentProject.id === p.id;
+      return '<div class="proj-card' + (isActive?' active-proj':'') + '" onclick="selectProject({id:\''+p.id+'\',name:\''+p.name+'\'})">' +
+        '<div style="width:40px;height:40px;background:#4f7cff;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;flex-shrink:0">📦</div>' +
+        '<div style="flex:1"><div style="font-weight:700;font-size:14px">' + p.name + '</div>' +
+        (p.desc ? '<div style="font-size:12px;color:#888;margin-top:2px">' + p.desc + '</div>' : '') + '</div>' +
+        (isActive ? '<span style="color:#27ae60;font-size:12px;font-weight:700">✓ Aktívny</span>' : '') +
+        '</div>';
+    }).join('');
+  });
+}
+
+function closeProjectSwitch() {
+  document.getElementById('project-switch-overlay').style.display = 'none';
+}
+
+function selectProject(proj) {
+  _currentProject = proj;
+  closeProjectSwitch();
+  document.getElementById('project-badge').style.display = 'flex';
+  document.getElementById('project-badge-name').textContent = proj.name;
+  // Aktualizuj heartbeat
+  if (window._fbReady && _currentUser) {
+    window.db.ref('online/' + _currentUser.uid + '/project').set(proj.id);
+  }
+  startApp();
+}
+
+function startApp() {
+  initFirebase();
+}
+
+// ─── Admin panel ─────────────────────────────────────────────────────────
+function openAdminPanel() {
+  document.getElementById('admin-overlay').style.display = 'flex';
+  switchAdminTab('projects');
+}
+
+function switchAdminTab(tab) {
+  document.getElementById('tab-projects').className = 'admin-tab' + (tab==='projects'?' active':'');
+  document.getElementById('tab-users').className    = 'admin-tab' + (tab==='users'?' active':'');
+  document.getElementById('tab-projects').style.cssText = tab==='projects'
+    ? 'padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:#4f7cff;border-bottom:2px solid #4f7cff'
+    : 'padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;color:#666;border-bottom:2px solid transparent';
+  document.getElementById('tab-users').style.cssText = tab==='users'
+    ? 'padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:#4f7cff;border-bottom:2px solid #4f7cff'
+    : 'padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;color:#666;border-bottom:2px solid transparent';
+  if (tab === 'projects') renderAdminProjects();
+  else renderAdminUsers();
+}
+
+function renderAdminProjects() {
+  var body = document.getElementById('admin-body');
+  body.innerHTML = '<div style="color:#aaa;font-size:12px;padding:10px">Načítavam…</div>';
+  window.db.ref('projects').once('value', function(snap) {
+    var projs = snap.val() || {};
+    var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
+      '<span style="font-weight:700;font-size:14px">Projekty</span>' +
+      '<button onclick="showAddProjectForm()" style="padding:6px 14px;background:#4f7cff;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px">+ Nový projekt</button>' +
+      '</div><div id="add-proj-form" style="display:none;background:#f7f8fa;border-radius:8px;padding:14px;margin-bottom:14px">' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<input id="new-proj-name" placeholder="Názov projektu (napr. Wacker CZ)" style="flex:1;min-width:160px;padding:8px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">' +
+      '<input id="new-proj-desc" placeholder="Popis (voliteľné)" style="flex:1;min-width:160px;padding:8px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">' +
+      '<button onclick="createProject()" style="padding:8px 16px;background:#27ae60;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px">Vytvoriť</button>' +
+      '</div></div>';
+
+    if (!Object.keys(projs).length) {
+      html += '<div style="text-align:center;padding:30px;color:#aaa;font-size:13px">Žiadne projekty. Vytvorte prvý.</div>';
+    } else {
+      Object.entries(projs).forEach(function(entry) {
+        var id = entry[0]; var p = entry[1];
+        html += '<div style="border:1px solid #e4e8ef;border-radius:8px;padding:14px;margin-bottom:8px;display:flex;align-items:center;gap:12px">' +
+          '<div style="flex:1"><strong>' + p.name + '</strong>' + (p.desc?'<span style="color:#888;font-size:12px;margin-left:8px">'+p.desc+'</span>':'') + '</div>' +
+          '<button onclick="deleteProject(\''+id+'\')" style="padding:4px 10px;border:1px solid #e74c3c;color:#e74c3c;background:none;border-radius:4px;cursor:pointer;font-size:12px">🗑</button>' +
+          '</div>';
+      });
+    }
+    body.innerHTML = html;
+  });
+}
+
+function showAddProjectForm() {
+  var f = document.getElementById('add-proj-form');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+function createProject() {
+  var name = (document.getElementById('new-proj-name').value||'').trim();
+  var desc = (document.getElementById('new-proj-desc').value||'').trim();
+  if (!name) { alert('Zadajte názov projektu'); return; }
+  var id = name.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9\-]/g,'');
+  window.db.ref('projects/' + id).set({ name: name, desc: desc, created: Date.now() })
+    .then(function() { renderAdminProjects(); });
+}
+
+function deleteProject(id) {
+  if (!confirm('Vymazať projekt "' + id + '"? Všetky dáta skladu a výdajok tohto projektu budú zmazané!')) return;
+  window.db.ref('projects/' + id).remove().then(function() { renderAdminProjects(); });
+}
+
+function renderAdminUsers() {
+  var body = document.getElementById('admin-body');
+  body.innerHTML = '<div style="color:#aaa;font-size:12px;padding:10px">Načítavam…</div>';
+
+  Promise.all([
+    window.db.ref('users').once('value'),
+    window.db.ref('projects').once('value')
+  ]).then(function(snaps) {
+    var users = snaps[0].val() || {};
+    var projs = snaps[1].val() || {};
+    var projList = Object.entries(projs).map(function(e){ return {id:e[0],name:e[1].name}; });
+
+    var html = '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+      '<thead><tr style="background:#f0f2f5"><th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#666">Meno</th>' +
+      '<th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#666">Email</th>' +
+      '<th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#666">Rola</th>' +
+      '<th style="padding:8px 10px;font-size:11px;text-transform:uppercase;color:#666">Projekty</th></tr></thead><tbody>';
+
+    Object.entries(users).forEach(function(entry) {
+      var uid = entry[0]; var u = entry[1];
+      var projCheckboxes = projList.map(function(p) {
+        var has = u.projects && u.projects.includes(p.id);
+        return '<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">' +
+          '<input type="checkbox" ' + (has?'checked':'') + ' onchange="toggleUserProject(\''+uid+'\',\''+p.id+'\',this.checked)">' +
+          p.name + '</label>';
+      }).join('');
+      html += '<tr style="border-bottom:1px solid #eee">' +
+        '<td style="padding:10px">' + (u.name||'—') + '</td>' +
+        '<td style="padding:10px;font-size:12px;color:#666">' + (u.email||'—') + '</td>' +
+        '<td style="padding:10px"><span style="font-size:11px;padding:2px 8px;border-radius:3px;background:' + (u.role==='admin'?'#dbeafe':'#f0f2f5') + ';color:' + (u.role==='admin'?'#1d4ed8':'#666') + '">' + (u.role||'user') + '</span></td>' +
+        '<td style="padding:10px"><div style="display:flex;flex-direction:column;gap:4px">' + projCheckboxes + '</div></td>' +
+        '</tr>';
+    });
+    html += '</tbody></table>';
+    body.innerHTML = html;
+  });
+}
+
+function toggleUserProject(uid, projId, add) {
+  window.db.ref('users/' + uid + '/projects').once('value', function(snap) {
+    var projs = snap.val() || [];
+    if (add && !projs.includes(projId)) projs.push(projId);
+    if (!add) projs = projs.filter(function(p){ return p !== projId; });
+    window.db.ref('users/' + uid + '/projects').set(projs);
+  });
+}
+
+// ─── Firebase init pre dáta (per-projekt) ────────────────────────────────
+function initFirebase() {
+  var base = _currentProject ? 'projects/' + _currentProject.id : 'legacy';
+  if (!window._fbReady) {
+    items = JSON.parse(localStorage.getItem('sklad_' + base) || '[]');
+    vydajkyList = JSON.parse(localStorage.getItem('vydajky_' + base) || '[]');
+    setSyncStatus('⚠ Offline', '#e74c3c');
+    render(); populateMainFilters(); return;
+  }
+  setSyncStatus('⏳ Pripájam...', '#f59e0b');
+  window._fbOn(window._fbRef(base + '/sklad'), function(snap) {
+    var fbData = snap.val() ? Object.values(snap.val()) : [];
+    var local  = JSON.parse(localStorage.getItem('sklad_' + base) || '[]');
+    if (fbData.length === 0 && local.length > 0) {
+      items = local;
+      document.getElementById('migrate-btn').style.display = 'inline-block';
+      setSyncStatus('☁ Online — lokálne dáta čakajú na prenos', '#f59e0b');
+    } else {
+      items = fbData;
+      document.getElementById('migrate-btn').style.display = 'none';
+      setSyncStatus('☁ Online', '#27ae60');
+    }
+    render(); populateMainFilters();
+  }, function() {
+    items = JSON.parse(localStorage.getItem('sklad_' + base) || '[]');
+    setSyncStatus('⚠ Offline', '#e74c3c'); render();
+  });
+  window._fbOn(window._fbRef(base + '/vydajky'), function(snap) {
+    var fbVyd = snap.val() ? Object.values(snap.val()) : [];
+    var localVyd = JSON.parse(localStorage.getItem('vydajky_' + base) || '[]');
+    vydajkyList = fbVyd.length > 0 ? fbVyd : localVyd;
+  });
+}
+
+function save() {
+  var base = _currentProject ? 'projects/' + _currentProject.id : 'legacy';
+  if (!window._fbReady) { localStorage.setItem('sklad_' + base, JSON.stringify(items)); return; }
+  var obj = {}; items.forEach(function(it,i){ obj[i]=it; });
+  window._fbSet(window._fbRef(base + '/sklad'), obj).catch(function(){
+    localStorage.setItem('sklad_' + base, JSON.stringify(items));
+  });
+}
+
+function saveVydajkyFb() {
+  var base = _currentProject ? 'projects/' + _currentProject.id : 'legacy';
+  if (!window._fbReady) { localStorage.setItem('vydajky_' + base, JSON.stringify(vydajkyList)); return; }
+  var obj = {}; vydajkyList.forEach(function(v,i){ obj[i]=v; });
+  window._fbSet(window._fbRef(base + '/vydajky'), obj).catch(function(){
+    localStorage.setItem('vydajky_' + base, JSON.stringify(vydajkyList));
+  });
+}
+
+function migrateToFirebase() {
+  var base = _currentProject ? 'projects/' + _currentProject.id : 'legacy';
+  var local    = JSON.parse(localStorage.getItem('sklad_' + base) || '[]');
+  var localVyd = JSON.parse(localStorage.getItem('vydajky_' + base) || '[]');
+  // Skús aj staré kľúče
+  if (!local.length) local = JSON.parse(localStorage.getItem('sklad_items') || '[]');
+  if (!localVyd.length) localVyd = JSON.parse(localStorage.getItem('vydajky') || '[]');
+  if (!local.length && !localVyd.length) { alert('Nie sú žiadne lokálne dáta.'); return; }
+  if (!confirm('Preniesť ' + local.length + ' položiek skladu a ' + localVyd.length + ' výdajok do Firebase?')) return;
+  items = local; vydajkyList = localVyd;
+  save(); saveVydajkyFb();
+  document.getElementById('migrate-btn').style.display = 'none';
+  setSyncStatus('☁ Online', '#27ae60');
+  setStatus('✓ Prenesených ' + local.length + ' položiek a ' + localVyd.length + ' výdajok.', 'ok');
+}
+
+// Event listenery
+document.getElementById('admin-overlay').addEventListener('click', function(e) {
+  if (e.target === this) this.style.display = 'none';
+});
+document.getElementById('project-switch-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeProjectSwitch();
+});
+</script>
+
+<!-- Vytvorenie používateľov — spustiť raz z admin konzoly -->
+<!-- Martin Kolcar: martinkolcar@iso.sk / iso1985 (admin) -->
+<!-- Isabel Szeibecederova: isabelszeibecederova@iso.sk / iso4455 (user) -->
+
 </body>
 </html>
