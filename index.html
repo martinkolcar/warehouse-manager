@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Warehouse Manager</title>
+<title>WarehousePro</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-database-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-auth-compat.min.js"></script>
@@ -15,6 +16,7 @@ body { font-family: Arial, sans-serif; background: #f0f2f5; color: #1a1a2e; font
 header {
   background: #1a1a2e; color: #fff; padding: 14px 24px;
   display: flex; align-items: center; gap: 16px;
+  position: sticky; top: 0; z-index: 100;
 }
 header h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.03em; }
 header h1 span { color: #4f7cff; }
@@ -23,6 +25,7 @@ header .sub { font-size: 12px; color: #9a9bb0; }
 .toolbar {
   background: #fff; border-bottom: 1px solid #dde1e7;
   padding: 12px 24px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  position: sticky; top: 57px; z-index: 99;
 }
 
 .btn {
@@ -43,6 +46,7 @@ header .sub { font-size: 12px; color: #9a9bb0; }
 .filters {
   background: #fff; border-bottom: 1px solid #dde1e7;
   padding: 10px 24px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  position: sticky; top: 108px; z-index: 98;
 }
 .filters label { font-size: 12px; color: #666; }
 .filters input, .filters select {
@@ -257,18 +261,30 @@ table.main td.center { text-align: center; }
 <header>
   <div style="display:flex;align-items:center;gap:14px">
     <div>
-      <h1>Warehouse <span>Manager</span></h1>
+      <h1>Warehouse<span>Pro</span></h1>
     </div>
     <!-- Projekt badge -->
     <div id="project-badge" style="display:none;background:rgba(79,124,255,0.15);border:1px solid #4f7cff;border-radius:6px;padding:4px 12px;cursor:pointer" onclick="openProjectSwitch()" title="Prepnúť projekt">
       <span style="font-size:10px;color:#9a9bb0;display:block;line-height:1">PROJEKT</span>
       <span id="project-badge-name" style="font-size:13px;font-weight:700;color:#e0e8ff"></span>
     </div>
+    <!-- MTO badge -->
+    <div id="mto-badge" style="background:rgba(16,185,129,0.15);border:1px solid #10b981;border-radius:6px;padding:4px 12px;cursor:pointer" onclick="uploadMTOExcel()" title="Načítať MTO Excel">
+      <span style="font-size:10px;color:#9a9bb0;display:block;line-height:1">MTO</span>
+      <span id="mto-badge-count" style="font-size:13px;font-weight:700;color:#10b981">📊 Načítať</span>
+    </div>
   </div>
   <div style="flex:1"></div>
+  <!-- Jazyky -->
+  <div style="display:flex;gap:2px;background:rgba(255,255,255,0.12);border-radius:7px;padding:3px;margin-right:10px;border:1px solid rgba(255,255,255,0.15)">
+    <button onclick="setLang('sk')" id="hLangBtn_sk" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:4px;opacity:1" title="Slovenčina">🇸🇰</button>
+    <button onclick="setLang('en')" id="hLangBtn_en" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:4px;opacity:0.4" title="English">🇬🇧</button>
+    <button onclick="setLang('de')" id="hLangBtn_de" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:4px;opacity:0.4" title="Deutsch">🇩🇪</button>
+    <button onclick="setLang('uk')" id="hLangBtn_uk" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:4px;opacity:0.4" title="Українська">🇺🇦</button>
+  </div>
   <!-- Online používatelia -->
   <div id="online-bar" style="display:none;align-items:center;gap:6px;margin-right:16px"></div>
-  <button class="btn" style="background:#4f7cff;color:#fff;font-size:13px;padding:9px 20px;border-radius:6px" onclick="openVydajkaWindow()">📋 Nová výdajka</button>
+  <button id="btn-nova-vydajka" class="btn" style="background:#4f7cff;color:#fff;font-size:13px;padding:9px 20px;border-radius:6px" onclick="openVydajkaWindow()">📋 Nová výdajka</button>
   <span id="sync-status" style="font-size:11px;margin-left:10px;color:#f59e0b">⏳ Pripájam...</span>
   <!-- User menu -->
   <div id="user-menu-wrap" style="display:none;margin-left:14px;position:relative">
@@ -289,25 +305,27 @@ table.main td.center { text-align: center; }
 <div class="toolbar">
   <!-- Import docx -->
   <div class="file-wrap">
-    <button class="btn btn-blue">📂 Nahrať dodací list (.docx)</button>
+    <button id="btn-import" class="btn btn-blue">📂 Nahrať dodací list (.docx)</button>
     <input type="file" accept=".docx" multiple onchange="importDocx(event)">
   </div>
-  <button class="btn btn-gray" onclick="openAddModal()">+ Pridať ručne</button>
-  <button class="btn btn-gray" onclick="exportCSV()">⬇ Export CSV</button>
-  <button class="btn btn-gray" onclick="openVydajkyZoznam()" style="background:#f0f4ff;border-color:#4f7cff;color:#4f7cff">📋 Výdajky</button>
+  <button id="btn-add" class="btn btn-gray" onclick="openAddModal()">+ Pridať ručne</button>
+  <button id="btn-csv" class="btn btn-gray" onclick="exportCSV()">⬇ Export CSV</button>
+  <button id="btn-vydajky" class="btn btn-gray" onclick="openVydajkyZoznam()" style="background:#f0f4ff;border-color:#4f7cff;color:#4f7cff">📋 Výdajky</button>
   <button id="migrate-btn" class="btn btn-gray" onclick="migrateToFirebase()" style="display:none;background:#fff7ed;border-color:#f59e0b;color:#b45309">☁ Preniesť do cloudu</button>
   <span style="flex:1"></span>
-  <button class="btn btn-red" onclick="clearAll()">🗑 Vymazať všetko</button>
+  <button id="btn-delete-all" class="btn btn-red" onclick="clearAll()">🗑 Vymazať všetko</button>
 </div>
 
 <div class="filters">
-  <label>Typ:</label>
+  <label id="lbl-typ">Typ:</label>
   <select id="f-typ" onchange="render()"><option value="">— všetky —</option></select>
-  <label>Rozmer:</label>
+  <label id="lbl-rozmer">Rozmer:</label>
   <select id="f-rozmer" onchange="render()"><option value="">— všetky —</option></select>
-  <label>Materiál:</label>
+  <label id="lbl-mat">Materiál:</label>
   <select id="f-mat" onchange="render()"><option value="">— všetky —</option></select>
-  <button class="btn btn-gray" onclick="clearFilters()">× Vyčistiť</button>
+  <label id="lbl-tavba">Tavba:</label>
+  <input id="f-tavba" placeholder="napr. R61462" oninput="render()" style="width:110px">
+  <button id="btn-clear-filter" class="btn btn-gray" onclick="clearFilters()">× Vyčistiť</button>
 </div>
 
 <div id="status-bar">
@@ -339,17 +357,17 @@ table.main td.center { text-align: center; }
     <thead>
       <tr>
         <th>#</th>
-        <th>Typ</th>
-        <th>Rozmer</th>
-        <th>Materiál</th>
-        <th>Norma</th>
-        <th>Zostatok</th>
-        <th>Jed.</th>
-        <th>Pozn.</th>
-        <th>Tavba</th>
-        <th>Dodací list</th>
-        <th>Dátum</th>
-        <th>Akcie</th>
+        <th id="th-colTyp">Typ</th>
+        <th id="th-colRozmer">Rozmer</th>
+        <th id="th-colMaterial">Materiál</th>
+        <th id="th-colNorma">Norma</th>
+        <th id="th-colZostatok">Zostatok</th>
+        <th id="th-colJed">Jed.</th>
+        <th id="th-colPozn">Pozn.</th>
+        <th id="th-colTavba">Tavba</th>
+        <th id="th-colDl">Dodací list</th>
+        <th id="th-colDatum">Dátum</th>
+        <th id="th-colAkcie">Akcie</th>
       </tr>
     </thead>
     <tbody id="main-tbody">
@@ -423,11 +441,13 @@ function render() {
   const fTyp    = document.getElementById('f-typ').value;
   const fRozmer = document.getElementById('f-rozmer').value;
   const fMat    = document.getElementById('f-mat').value;
+  const fTavba  = (document.getElementById('f-tavba').value||'').trim().toUpperCase();
 
   const filtered = items.filter(it =>
     (!fTyp    || it.typ === fTyp) &&
     (!fRozmer || it.rozmer === fRozmer) &&
-    (!fMat    || (it.material||'') === fMat)
+    (!fMat    || (it.material||'') === fMat) &&
+    (!fTavba  || (it.tavba||'').toUpperCase().includes(fTavba))
   );
 
   document.getElementById('count-text').textContent =
@@ -523,16 +543,15 @@ function importDocx(e) {
     const file = files[0];
     setStatus('Čítam ' + file.name + ' ...', 'info');
     file.arrayBuffer().then(buf => {
-      mammoth.convertToHtml({ arrayBuffer: buf }).then(res => {
-        const parsed = parseHtml(res.value, file.name);
+      mammoth.convertToHtml({ arrayBuffer: buf, styleMap: ['strike => s'] }).then(res => {
+        const cleanHtml = res.value.replace(/<s>[^<]*<\/s>/gi, '');
+        const parsed = parseHtml(cleanHtml, file.name);
         if (!parsed.length) { setStatus('Nenašiel som žiadne položky.', 'err'); return; }
-        // Duplikát check
-        const dlCislo = parsed[0].zdroj_dl;
-        const existing = items.filter(it => it.zdroj_dl === dlCislo);
-        if (existing.length) {
-          if (!confirm('DL ' + dlCislo + ' bol už importovaný (' + existing.length + ' položiek).\nAk pokračujete, množstvá sa pripočítajú (alebo zlúčia).\n\nPokračovať?')) {
-            setStatus('Import zrušený.', ''); return;
-          }
+        // Duplikát check - ak DL číslo už existuje, ticho preskočiť
+        const dlCislo = parsed[0] ? parsed[0].zdroj_dl : '';
+        if (dlCislo && items.some(it => it.zdroj_dl === dlCislo)) {
+          setStatus('DL ' + dlCislo + ' už bol importovaný — preskočený.', 'info');
+          return;
         }
         previewItems = parsed;
         showPreview(parsed, file.name);
@@ -544,8 +563,9 @@ function importDocx(e) {
     let done = 0;
     files.forEach(file => {
       file.arrayBuffer().then(buf => {
-        mammoth.convertToHtml({ arrayBuffer: buf }).then(res => {
-          const parsed = parseHtml(res.value, file.name);
+        mammoth.convertToHtml({ arrayBuffer: buf, styleMap: ['strike => s'] }).then(res => {
+          const cleanHtml = res.value.replace(/<s>[^<]*<\/s>/gi, '');
+          const parsed = parseHtml(cleanHtml, file.name);
           allItems = allItems.concat(parsed);
           done++;
           setStatus('Spracovaných ' + done + ' / ' + files.length + ' súborov...', 'info');
@@ -564,136 +584,166 @@ function parseHtml(html, filename) {
   const dom = new DOMParser().parseFromString(html, 'text/html');
   const result = [];
 
-  // Číslo DL z HTML textu alebo z názvu súboru
-  const dlMatch = html.match(/DL[\s_-]*(?:CZ|SK|SE|HU)?[\s_-]*\d{4}[\s_-]*[\d\/\-]+/i)
+  // Číslo DL
+  const dlMatch = html.match(/DL[\s_\-]*(?:CZ|SK|SE|HU)?[\s_\-]*\d{4}[\s_\-]*[\d\/\-]+/i)
     || html.match(/DL\d{4}\/[\d]+\/[\d]+/);
   const dlCislo = dlMatch ? dlMatch[0].replace(/\s/g,'') : filename.replace(/\.[^.]+$/,'');
+  const today = new Date().toISOString().split('T')[0];
 
   for (const tbl of dom.querySelectorAll('table')) {
     const rows = [...tbl.querySelectorAll('tr')];
     if (rows.length < 2) continue;
 
-    // ── Detekcia formátu ──────────────────────────────────────────
-    // Formát A: Description | Rozmer | Norma | [Pozn] | Qty | ✓ | Tavba
-    // Formát B: Pos | Description | Rozmer | Norma | (prázdny) | KS | Tavba
-    // Formát C (Lignarec): Sekcia | Typ | DN | Rozmer | Norma | Qty | Tavba
-    let format = 'A';
-    let dataRows = [];
+    // Nájdi hlavičkový riadok a zisti formát
+    let format = null;
+    let dataStart = 0;
 
-    for (let ri = 0; ri < rows.length; ri++) {
+    for (let ri = 0; ri < Math.min(rows.length, 5); ri++) {
       const cells = [...rows[ri].querySelectorAll('td,th')].map(c => c.textContent.trim());
-      const joined = cells.join('|').toLowerCase();
+      const uniq = cells.filter((c,i,a) => a.indexOf(c) === i);
+      const j = uniq.join('|').toLowerCase();
 
-      // Detekuj hlavičkový riadok
-      if (joined.includes('description') || joined.includes('ks') || joined.includes('tavba')) {
-        const nextRow = rows[ri+2] ? [...rows[ri+2].querySelectorAll('td,th')].map(c=>c.textContent.trim()) : [];
-        if (cells.length >= 6 && (joined.includes('ks') || joined.includes('tavba'))) {
-          if (nextRow.length >= 6 && /^\d+$/.test(nextRow[0].replace(/\s/g,''))) {
-            format = 'B';
-          }
+      if (j.includes('description') || (j.includes('ks') && j.includes('tavba'))) {
+        // Pozri prvý dátový riadok (ri+1, nie ri+2)
+        const d = rows[ri+1] ? [...rows[ri+1].querySelectorAll('td,th')].map(c=>c.textContent.trim()).filter((c,i,a)=>a.indexOf(c)===i) : [];
+        
+        if (d[0] && /^\d+$/.test(d[0].replace(/\s/g,''))) {
+          // Formát B: prvý dátový riadok začína číslom (pos)
+          format = 'B';
+          dataStart = ri + 1;
+        } else if (d[0] && !/^(pipe|elbow|reducer|tee|flange|cap|socket|weld|blank|hex)/i.test(d[0]) &&
+                   d[1] && /elbow|reducer|pipe|tee|flange|cap|socket|weld|blank|hex/i.test(d[1]) &&
+                   d[2] && /\d+[\.,]\d+/.test(d[2])) {
+          // Formát C: prvá bunka = dodávateľ, druhá = typ, tretia = rozmer
+          format = 'C';
+          dataStart = ri + 1;
+        } else {
+          // Formát A
+          format = 'A';
+          dataStart = ri + 1;
         }
-        dataRows = rows.slice(ri + 2);
         break;
       }
 
-      // Formát C: prvá bunka = text sekcie, druhá = typ fitingu
-      if (cells.length >= 6 && cells[0] && !/^\d+$/.test(cells[0]) &&
-          /elbow|reducer|pipe|tee|flange|cap|socket|hexagonal|sulfaloop|bend/i.test(cells[1]||'') &&
-          /^\d+/.test(cells[2]||'')) {
+      // Bez hlavičky — formát C (prvá bunka dodávateľ, druhá typ, tretia rozmer)
+      if (uniq.length >= 5 && uniq[0] && !/^\d+$/.test(uniq[0]) &&
+          uniq[1] && /elbow|reducer|pipe|tee|flange|cap|socket|weld|blank|hex/i.test(uniq[1]) &&
+          uniq[2] && /\d+[\.,]\d+/.test(uniq[2])) {
         format = 'C';
-        dataRows = rows.slice(ri);
+        dataStart = ri;
         break;
       }
 
-      // Formát B bez hlavičky
-      if (/^\d+$/.test(cells[0]) && cells[1] && /elbow|reducer|pipe|tee|flange|cap|t-piece|bend/i.test(cells[1])) {
+      // Bez hlavičky — formát B (prvá bunka číslo)
+      if (/^\d+$/.test((uniq[0]||'').replace(/\s/g,'')) && uniq[1] &&
+          /elbow|reducer|pipe|tee|flange|cap|t-piece|bend/i.test(uniq[1])) {
         format = 'B';
-        dataRows = rows.slice(ri);
+        dataStart = ri;
         break;
       }
     }
 
-    if (!dataRows.length) continue;
+    if (!format) continue;
 
-    for (const row of dataRows) {
-      const cells = [...row.querySelectorAll('td,th')].map(c => c.textContent.trim());
+    for (let ri = dataStart; ri < rows.length; ri++) {
+      const raw = [...rows[ri].querySelectorAll('td,th')].map(c => c.textContent.trim());
+      // Deduplikuj zlúčené bunky
+      const cells = raw.filter((c,i) => raw.indexOf(c) === i);
       if (cells.length < 3) continue;
 
-      let desc, rozmer, norma, qtyRaw, tavbaRaw;
+      let desc='', rozmer='', norma='', qtyRaw='', tavbaRaw='';
 
       if (format === 'B') {
-        // Pos | Typ | Rozmer | Norma | (prázdny) | KS | Tavba
+        // Pos | Desc | Rozmer | Norma | (empty) | qty✓ | tavba
         if (!/^\d+$/.test((cells[0]||'').replace(/\s/g,''))) continue;
-        desc     = cells[1] || '';
-        rozmer   = cells[2] || '';
-        norma    = cells[3] || '';
-        qtyRaw   = cells[5] || '';
-        tavbaRaw = cells[6] || '';
+        desc=cells[1]; rozmer=cells[2]; norma=cells[3];
+        // qty a tavba — nájdi za norma
+        let qf=false;
+        for (let i=4;i<cells.length;i++) {
+          const v=cells[i].replace(/[✓√\s]/g,'');
+          if(!v) continue;
+          if(!qf&&/^[\d,\.]+$/.test(v)){qtyRaw=v;qf=true;}
+          else if(qf){tavbaRaw=cells[i];break;}
+        }
+
       } else if (format === 'C') {
-        // Sekcia | Typ | DN | Rozmer | Norma | Qty | Tavba
-        if (!cells[1] || !/elbow|reducer|pipe|tee|flange|cap|socket|hexagonal|sulfaloop|bend/i.test(cells[1])) continue;
-        desc     = cells[1] || '';
-        rozmer   = cells[3] || '';  // skutočný rozmer napr. 33.7x2
-        norma    = cells[4] || '';
-        qtyRaw   = cells[5] || '';
-        tavbaRaw = cells[6] || '';
+        // Dodávateľ | Desc | Rozmer | Norma | qty✓ | tavba
+        if (!cells[0]||!cells[1]) continue;
+        if (!/elbow|reducer|pipe|tee|flange|cap|socket|weld|blank|hex/i.test(cells[1])) continue;
+        desc=cells[1]; rozmer=cells[2]; norma=cells[3];
+        qtyRaw=cells[4]||''; tavbaRaw=cells[5]||'';
+
       } else {
-        // Formát A: Typ | Rozmer | Norma | [Pozn] | Qty | ✓ | Tavba
-        desc   = cells[0] || '';
-        rozmer = cells[1] || '';
-        norma  = cells[2] || '';
-        qtyRaw = ''; tavbaRaw = '';
-        let qtyFound = false;
-        for (let i = 3; i < cells.length; i++) {
-          const raw = cells[i].replace(/[✓√\s]/g,'');
-          if (!raw) continue;
-          if (!qtyFound) {
-            if (/^[\d,\.]+$/.test(raw)) { qtyRaw = raw; qtyFound = true; }
+        // Formát A: Desc | Rozmer | Norma | [Pozn] | qty✓ | [✓] | tavba
+        desc=cells[0]; rozmer=cells[1]; norma=cells[2];
+        let qf=false;
+        for (let i=3;i<cells.length;i++) {
+          const v=cells[i].replace(/[✓√\s]/g,'');
+          if(!v) continue;
+          if(!qf) {
+            if(/^[\d,\.]+$/.test(v)){qtyRaw=v;qf=true;}
+            // inak = poznamka, preskočiť
           } else {
-            tavbaRaw = cells[i];
+            // Preskočiť samostatné ✓
+            if(v==='✓'||v==='√') continue;
+            tavbaRaw=cells[i]; break;
           }
         }
       }
 
-      if (!desc || !rozmer) continue;
+      if (!desc||!rozmer) continue;
 
       // Vyčisti rozmer
-      rozmer = rozmer.split(/\s+/)[0].replace(',','.');
+      let rozmerClean = rozmer.trim();
+      if (/^DN\s+/i.test(rozmerClean)) {
+        // "DN 50 x 60.3" → "60.3"  |  "DN 400 x 406.4" → "406.4"
+        const dnX = rozmerClean.match(/[xX]\s*([\d\.]+)/);
+        rozmerClean = dnX ? dnX[1] : rozmerClean.replace(/^DN\s+/i,'').split(/\s+/)[0];
+      } else if (/^R\s+/i.test(rozmerClean)) {
+        // "R 1/2" → "R1/2"  |  "R 1 1/2" → "R1-1/2"
+        rozmerClean = 'R' + rozmerClean.replace(/^R\s+/i,'').replace(/\s+/g,'-');
+      } else {
+        // "26.7x2 26,9X2" → "26.7x2"
+        rozmerClean = rozmerClean.split(/\s+/)[0].replace(',','.');
+      }
+      rozmer = rozmerClean;
 
+      // Qty — vyčisti ✓
       const qty = parseFloat((qtyRaw||'').replace(/[✓√\s]/g,'').replace(',','.')) || 0;
-      if (qty === 0) continue;
+      if (qty===0) continue;
 
-      const tavba = (tavbaRaw||'').replace(/[✓√]/g,'').trim();
       const isPipe = desc.toLowerCase().includes('pipe');
-      const matMatch = norma.match(/^([A-Z0-9][A-Za-z0-9]*)/);
-      const material = matMatch ? matMatch[1] : (norma.split(',')[0]||'').trim();
 
-      // Multi-tavba split pre non-pipe
-      if (!isPipe && tavba && tavba.includes(',')) {
-        const segments = tavba.split(',').map(s=>s.trim()).filter(Boolean);
-        const parsed = segments.map(seg => {
-          const m = seg.match(/^(.+?)-?(\d+)\s*ks?$/i);
+      // Materiál = prvý token pred čiarkou (napr. "1.4307" alebo "P235GH")
+      // Norma ostáva celá
+      const material = (norma.split(',')[0]||'').trim();
+
+      // ── Tavba ──────────────────────────────────────────────────
+      const tavbaClean = (tavbaRaw||'').replace(/[✓√]/g,'').trim();
+
+      // Ak je viac tavíeb (newline alebo čiarka) a každá má explicitné qty "-Nks"
+      if (!isPipe && tavbaClean && (tavbaClean.includes('\n') || tavbaClean.includes(','))) {
+        const segs = tavbaClean.split(/[\n\r,]+/).map(s => s.trim()).filter(Boolean);
+        const withQty = segs.map(s => {
+          const m = s.match(/^(.+?)\s*[-–]\s*(\d+)\s*(?:ks|x|pcs)$/i);
           return m ? { tavba: m[1].trim(), qty: parseFloat(m[2]) } : null;
         });
-        if (parsed.every(p=>p!==null)) {
-          parsed.forEach(p => result.push({
-            typ: desc, rozmer, material, norma,
-            jednotka: 'ks', zostatok: p.qty, tavba: p.tavba,
-            poznamka: '', zdroj_dl: dlCislo,
-            datum: new Date().toISOString().split('T')[0],
-          }));
+        if (withQty.every(p => p !== null)) {
+          // Každý segment má explicitnú qty — rozdeliť
+          withQty.forEach(p => result.push({typ:desc,rozmer,material,norma,jednotka:'ks',zostatok:p.qty,tavba:p.tavba,poznamka:'',zdroj_dl:dlCislo,datum:today}));
           continue;
         }
+        // Bez explicitných qty — daj všetky tavby do jedného záznamu, qty z KS stĺpca
+        // Vyčisti každú tavbu od suffixu (-48KS, -32 atď.)
+        const tavbyClean = segs
+          .map(s => s.replace(/\s*[-–]\s*\d+\s*(?:ks|x|pcs)?$/i, '').trim())
+          .filter(t => t && !/^[-–\s\d]+$/.test(t))
+          .join(', ');
+        result.push({typ:desc,rozmer,material,norma,jednotka:'ks',zostatok:qty,tavba:tavbyClean||tavbaClean,poznamka:'',zdroj_dl:dlCislo,datum:today});
+        continue;
       }
 
-      result.push({
-        typ: desc, rozmer, material, norma,
-        jednotka: isPipe ? 'm' : 'ks',
-        zostatok: qty, tavba,
-        poznamka: '',
-        zdroj_dl: dlCislo,
-        datum: new Date().toISOString().split('T')[0],
-      });
+      result.push({typ:desc,rozmer,material,norma,jednotka:isPipe?'m':'ks',zostatok:qty,tavba:tavbaClean,poznamka:'',zdroj_dl:dlCislo,datum:today});
     }
   }
   return result;
@@ -747,7 +797,8 @@ function confirmImport() {
     if (merge) {
       const ex = items.findIndex(m =>
         m.typ === it.typ && m.rozmer === it.rozmer &&
-        m.norma === it.norma && m.tavba === it.tavba
+        m.norma === it.norma && m.tavba === it.tavba &&
+        m.zdroj_dl === it.zdroj_dl
       );
       if (ex >= 0) {
         const pred = parseFloat(items[ex].zostatok)||0;
@@ -855,8 +906,10 @@ function saveModal() {
 
 // ─── UTILS ────────────────────────────────────
 function clearFilters() {
-  ['f-rozmer','f-mat'].forEach(id => document.getElementById(id).value='');
   document.getElementById('f-typ').value = '';
+  document.getElementById('f-rozmer').value = '';
+  document.getElementById('f-mat').value = '';
+  document.getElementById('f-tavba').value = '';
   render();
 }
 
@@ -913,13 +966,13 @@ document.getElementById('modal').addEventListener('click', function(e) {
   <div class="vyd-panel">
     <!-- Header -->
     <div class="vyd-header">
-      <h2>📋 Výdajka</h2>
+      <h2 id="vyd-title-text">📋 Výdajka</h2>
       <span id="vyd-iso-label" style="font-family:monospace;font-size:13px;color:#9a9bb0;margin-left:8px"></span>
       <div style="flex:1"></div>
-      <button class="btn" style="background:#6b7280;color:#fff;padding:6px 14px" onclick="openVydNahlad()">👁 Náhľad</button>
-      <button class="btn" style="background:#27ae60;color:#fff;padding:6px 14px;margin-left:6px" onclick="saveVydajka('pdf')">📄 Uložiť + PDF</button>
-      <button class="btn" style="background:#4f7cff;color:#fff;padding:6px 14px;margin-left:6px" onclick="saveVydajka('save')">💾 Uložiť</button>
-      <button class="btn" style="background:#374151;color:#fff;margin-left:14px;padding:6px 14px" onclick="closeVydajka()">✕ Zavrieť</button>
+      <button id="vyd-btn-nahlad" class="btn" style="background:#6b7280;color:#fff;padding:6px 14px" onclick="openVydNahlad()">👁 Náhľad</button>
+      <button id="vyd-btn-pdf" class="btn" style="background:#27ae60;color:#fff;padding:6px 14px;margin-left:6px" onclick="saveVydajka('pdf')">📄 Uložiť + PDF</button>
+      <button id="vyd-btn-uloz" class="btn" style="background:#4f7cff;color:#fff;padding:6px 14px;margin-left:6px" onclick="saveVydajka('save')">💾 Uložiť</button>
+      <button id="vyd-btn-zavr" class="btn" style="background:#374151;color:#fff;margin-left:14px;padding:6px 14px" onclick="closeVydajka()">✕ Zavrieť</button>
     </div>
     <!-- Body -->
     <div class="vyd-body">
@@ -976,8 +1029,8 @@ document.getElementById('modal').addEventListener('click', function(e) {
           <div class="vyd-lines-scroll">
             <table class="vyd-lines-table">
               <thead><tr>
-                <th>Typ</th><th>Rozmer</th><th>Materiál</th><th>Tavba</th>
-                <th>Qty izom.</th><th>Vydané</th><th>Jed.</th>
+                <th id="vyd-th-typ">Typ</th><th id="vyd-th-rozmer">Rozmer</th><th id="vyd-th-mat">Materiál</th><th id="vyd-th-tavba">Tavba</th>
+                <th id="vyd-th-qty">Qty izom.</th><th id="vyd-th-vydane">Vydané</th><th id="vyd-th-jed">Jed.</th>
                 <th id="vyd-th-dlzka" style="display:none">Dĺžka (mm)</th>
                 <th id="vyd-th-sp" style="display:none">SP č.</th>
                 <th></th>
@@ -1006,6 +1059,150 @@ const ISOS = {
   DRY: ["GLP-720-20004-14-40-10H1A","GLP-720-20004-15-40-10H1A","GLP-720-20004-16-40-10H1A","VKM-720-20005-25-250-10H2A"],
   LHT: ["GÅL-716-20159-1-300-25H2A","GÅL-716-20160-1-300-25H2A","GÅL-716-20161-1-400-25H2A","GKD-716-20186-2-250-25H2A","KL-716-20185-1-50-40H1A","LTJ-716-20150-2-300-40H3A","LTJ-716-20151-1-300-40H3A","LTJ-716-20174-1-100-40H1A","VVM-716-20171-1-100-10H2A"]
 };
+
+// ─── MTO DATA ─────────────────────────────────
+// Načítané z MTO Excel (náš DXF parser)
+window.mtoData = {
+  materials: [],      // všetky položky
+  isoList: [],        // unikátne izometrie (SÚBOR stĺpec)
+  loaded: false
+};
+
+// Typy ktoré sa zváraju (pre vydajku)
+const WELD_TYPES = ['PIPE','ELBOW','TEE','REDUCER','FLANGE','CAP','VALVE'];
+
+// Kategórie ktoré nechceme vo vydajke
+const SKIP_CATEGORIES = ['TESNENIA','SKRUTKY','ULOŽENIA A UZEMNENIE','ULOŽENIA a UZEMNENIE'];
+
+function uploadMTOExcel() {
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.xlsx,.xls';
+  input.onchange = function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      try {
+        var data = new Uint8Array(ev.target.result);
+        var workbook = XLSX.read(data, {type:'array'});
+        // Hľadaj sheet MTO
+        var sheetName = workbook.SheetNames[0];
+        if (workbook.SheetNames.indexOf('MTO') >= 0) sheetName = 'MTO';
+        var sheet = workbook.Sheets[sheetName];
+        var json = XLSX.utils.sheet_to_json(sheet);
+
+        window.mtoData.materials = [];
+        var isoSet = {};
+
+        json.forEach(function(row) {
+          var subor     = (row['SÚBOR']||row['SUBOR']||row['FILE']||'').trim();
+          var izometria = (row['IZOMETRIA']||row['ISOMETRIC']||'').trim();
+          var kategoria = (row['KATEGÓRIA']||row['KATEGORIA']||'').trim();
+          var poz       = (row['POZ.']||row['POZ']||'').toString().trim();
+          var dn        = (row['DN']||'').toString().trim();
+          var popis     = (row['POPIS']||row['PART DESCRIPTION']||'').trim();
+          var mn        = (row['MN. [m/ks]']||row['MN']||row['QTY']||'').toString().trim();
+          var hmotn     = (row['HMOTN. [kg]']||row['HMOTN']||'').toString().trim();
+
+          if (!popis) return;
+
+          // Preskočiť tesnenia, skrutky, podpery
+          var skip = false;
+          SKIP_CATEGORIES.forEach(function(cat) {
+            if (kategoria.toUpperCase().includes(cat.toUpperCase())) skip = true;
+          });
+          if (skip) return;
+
+          // Klasifikuj typ
+          var weldType = classifyWeldType(popis);
+
+          window.mtoData.materials.push({
+            subor, izometria, kategoria, poz, dn, popis, mn, hmotn,
+            weldType
+          });
+
+          if (subor) isoSet[subor] = true;
+        });
+
+        window.mtoData.isoList = Object.keys(isoSet).sort();
+        window.mtoData.loaded = true;
+
+        // Ulož na Firebase
+        var base = window._currentProject ? 'projects/' + window._currentProject.id : 'legacy';
+        if (window._fbReady) {
+          window._fbSet(window._fbRef(base + '/mto'), window.mtoData).then(function() {
+            console.log('✅ MTO uložené na Firebase');
+          }).catch(function(e) {
+            console.warn('⚠️ Firebase MTO zápis zlyhal:', e);
+            localStorage.setItem('warehousepro_mto_' + base, JSON.stringify(window.mtoData));
+          });
+        } else {
+          // Fallback na localStorage
+          localStorage.setItem('warehousepro_mto_' + base, JSON.stringify(window.mtoData));
+        }
+
+        updateMTOBadge();
+        window._projectIsos = null;
+
+        alert('✅ MTO načítané!\n\n📝 Položiek: ' + window.mtoData.materials.length + '\n📐 Izometrií: ' + window.mtoData.isoList.length);
+      } catch(err) {
+        alert('❌ Chyba: ' + err.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+  input.click();
+}
+
+function classifyWeldType(popis) {
+  var p = popis.toUpperCase();
+  if (p.includes('RÚRA') || p.includes('RURA')) return 'PIPE';
+  if (p.includes('OBLÚK') || p.includes('OBLUK') || p.includes('KOLENO')) return 'ELBOW';
+  if (p.includes('T-KUS') || p.includes('TKUS')) return 'TEE';
+  if (p.includes('REDUKCI')) return 'REDUCER';
+  if (p.includes('PRÍRUBA') || p.includes('PRIRUBA') || p.includes('ZASLEPOVACIA')) return 'FLANGE';
+  if (p.includes('ZÁSLEPKA') || p.includes('ZASLEPKA')) return 'CAP';
+  if (p.includes('KLAPKA') || p.includes('VENTIL')) return 'VALVE';
+  return null;
+}
+
+function extractDimsFromPopis(popis) {
+  var m = popis.match(/(\d+\.?\d*)x(\d+\.?\d*)mm/);
+  if (m) return { od: m[1], wt: m[2], size: m[1]+'x'+m[2] };
+  var m2 = popis.match(/DN\s*(\d+)/i);
+  if (m2) return { od: m2[1], wt: '', size: m2[1] };
+  return { od: '', wt: '', size: '' };
+}
+
+function extractMaterialFromPopis(popis) {
+  var m = popis.match(/\b(P\d{3}[A-Z]{0,2}|25CrMo\d|13CrMo|316L?|304L?|1\.4\d{3})\b/);
+  return m ? m[1] : '';
+}
+
+function updateMTOBadge() {
+  var badge = document.getElementById('mto-badge-count');
+  if (!badge) return;
+  if (window.mtoData.loaded && window.mtoData.isoList.length > 0) {
+    badge.textContent = '✅ ' + window.mtoData.isoList.length + ' izometrií';
+    badge.style.color = '#10b981';
+  } else {
+    badge.textContent = '📊 Načítať';
+    badge.style.color = '#f59e0b';
+  }
+}
+
+function getMTOForIso(isoName) {
+  if (!window.mtoData.loaded) return [];
+  return window.mtoData.materials.filter(function(m) {
+    var src = (m.subor||'').replace(/\.(pdf|dxf|jpg|png)$/i,'').replace(/[._]/g,'-').toLowerCase();
+    var iso = (isoName||'').replace(/\.(pdf|dxf|jpg|png)$/i,'').replace(/[._]/g,'-').toLowerCase();
+    return src === iso || src.includes(iso) || iso.includes(src);
+  });
+}
+
+// MTO dáta sa načítavajú z Firebase v initFirebase()
+window.mtoData = { materials: [], isoList: [], loaded: false };
 
 // ─── VÝDAJKA STATE ────────────────────────────
 let vydLines = [];
@@ -1081,37 +1278,37 @@ function closeVydajka() {
 
 // ─── ISO LIST (ľavý panel) ────────────────────
 function renderIsoList(q) {
-  const sec = document.getElementById('vyd-sec-sel').value;
-  const ql = (q||'').toLowerCase().trim();
-  const el = document.getElementById('vyd-iso-list');
+  var ql = (q||'').toLowerCase().trim();
+  var el = document.getElementById('vyd-iso-list');
 
-  // Zbier všetky izometrie
-  let all = [];
-  Object.entries(ISOS).forEach(([s, list]) => {
-    if (sec && s !== sec) return;
-    list.forEach(iso => all.push({ sec: s, iso }));
-  });
-
-  // Filter
-  const filtered = ql
-    ? all.filter(r => r.iso.toLowerCase().includes(ql))
-    : (ql === '' && !sec ? [] : all);
-
-  if (!filtered.length) {
-    el.innerHTML = ql || sec
-      ? '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">Žiadne výsledky</div>'
-      : '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">Zadajte hľadaný text alebo vyberte sekciu</div>';
+  // Použi MTO dáta ak sú načítané
+  var isoSource;
+  if (window.mtoData && window.mtoData.loaded && window.mtoData.isoList.length > 0) {
+    isoSource = window.mtoData.isoList;
+  } else {
+    el.innerHTML = '<div style="padding:16px;text-align:center;color:#f59e0b;font-size:12px">📊 Načítajte MTO Excel<br><button onclick="uploadMTOExcel()" style="margin-top:8px;padding:6px 12px;background:#10b981;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px">Načítať MTO</button></div>';
     return;
   }
 
-  el.innerHTML = filtered.slice(0, 200).map(r => {
-    const esc = r.iso.replace(/'/g, "\\'");
-    const active = vydIso === r.iso ? ' active' : '';
-    const highlight = ql ? r.iso.replace(new RegExp(`(${ql.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi'), '<mark style="background:#fff3b0;border-radius:2px">$1</mark>') : r.iso;
-    return `<div class="vyd-iso-item${active}" onclick="selectVydIso('${esc}','${r.sec}')">
-      <span class="vyd-iso-name">${highlight}</span>
-      <span class="vyd-sec-tag">${r.sec}</span>
-    </div>`;
+  var filtered = isoSource.filter(function(iso) {
+    if (ql && !iso.toLowerCase().includes(ql)) return false;
+    return true;
+  });
+
+  if (!filtered.length) {
+    el.innerHTML = '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">Žiadne výsledky</div>';
+    return;
+  }
+
+  el.innerHTML = filtered.slice(0, 300).map(function(iso) {
+    var esc = iso.replace(/'/g, "\\'");
+    var active = vydIso === iso ? ' active' : '';
+    var highlighted = ql ? iso.replace(new RegExp('(' + ql.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi'), '<mark style="background:#fff3b0;border-radius:2px">$1</mark>') : iso;
+    var mtoCount = getMTOForIso(iso).length;
+    var badge = mtoCount ? '<span style="background:#10b981;color:white;padding:1px 5px;border-radius:3px;font-size:10px;margin-left:4px">' + mtoCount + '</span>' : '';
+    return '<div class="vyd-iso-item' + active + '" onclick="selectVydIso(\'' + esc + '\',\'\')">' +
+      '<span class="vyd-iso-name">' + highlighted + badge + '</span>' +
+      '</div>';
   }).join('');
 }
 
@@ -1209,6 +1406,36 @@ function renderVydMatList() {
   const el      = document.getElementById('vyd-mat-list');
   if (!vydIso) { el.innerHTML = ''; return; }
 
+  // ── MTO sekcia pre izometriu ──
+  const mtoItems = getMTOForIso(vydIso).filter(m => m.weldType);
+  let html = '';
+
+  if (mtoItems.length > 0) {
+    html += '<div style="background:#f0fdf4;border:1px solid #10b981;border-radius:6px;padding:10px;margin-bottom:10px">';
+    html += '<div style="font-size:11px;font-weight:700;color:#065f46;margin-bottom:6px">📋 MTO — MATERIÁLY IZOMETRIE</div>';
+    mtoItems.forEach(function(m, idx) {
+      var dims = extractDimsFromPopis(m.popis);
+      var mat  = extractMaterialFromPopis(m.popis);
+      var typeColors = {PIPE:'#dbeafe',ELBOW:'#dcfce7',TEE:'#fef9c3',REDUCER:'#fce7f3',FLANGE:'#ede9fe',CAP:'#ffedd5',VALVE:'#fee2e2'};
+      var bg = typeColors[m.weldType]||'#f9fafb';
+      html += '<div onclick="addMTOToVydajka(' + idx + ')" style="padding:8px;border-bottom:1px solid #e5e7eb;cursor:pointer;display:flex;align-items:center;gap:8px;background:white;border-radius:4px;margin-bottom:4px">';
+      html += '<span style="background:'+bg+';padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700;min-width:55px;text-align:center">'+m.weldType+'</span>';
+      html += '<div style="flex:1;font-size:12px">';
+      html += '<div><strong>DN'+m.dn+'</strong>';
+      if (dims.size) html += ' &nbsp;<span style="color:#666">'+dims.size+'mm</span>';
+      if (mat) html += ' &nbsp;<span style="color:#059669">'+mat+'</span>';
+      html += '</div>';
+      html += '<div style="color:#9ca3af;font-size:10px">POZ.'+m.poz+' &nbsp;·&nbsp; '+m.mn+'</div>';
+      html += '</div>';
+      html += '<span style="font-size:10px;color:#10b981;font-weight:600">+ Pridať</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+    // Uložíme MTO items pre addMTOToVydajka
+    window._currentMTOItems = mtoItems;
+  }
+
+  // ── Sklad sekcia ──
   const avail   = items.filter(it => parseFloat(it.zostatok) > 0);
   const filtered = avail.filter(it =>
     (!fTyp    || it.typ === fTyp) &&
@@ -1231,29 +1458,68 @@ function renderVydMatList() {
 
   document.getElementById('vf-count').textContent = `${filtered.length} položiek`;
 
-  if (!filtered.length) {
-    el.innerHTML = '<div style="text-align:center;padding:30px;color:#aaa;font-size:12px">Žiadne položky</div>';
-    return;
+  if (filtered.length > 0) {
+    html += '<div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:6px;padding-left:2px">🏭 SKLAD</div>';
+    html += filtered.map(it => {
+      const realIdx = items.indexOf(it);
+      const q = parseFloat(it.zostatok)||0;
+      const qClass = q<=0?'qty-zero':q<3?'qty-low':'qty-ok';
+      const qStr = it.jednotka==='m'?q.toFixed(2)+' m':q+' ks';
+      return `<div class="vyd-mat-row" onclick="addToVydajka(${realIdx})">
+        <div class="mat-info">
+          <div><span class="badge badge-${typClass(it.typ)}">${shortType(it.typ)}</span>
+            <span class="mat-rozmer" style="margin-left:6px">${it.rozmer}</span></div>
+          <div class="mat-typ">${it.typ}</div>
+          <div class="mat-tavba">Tavba: <strong>${it.tavba||'—'}</strong> &nbsp;|&nbsp; ${it.material||''} &nbsp;|&nbsp; <span style="color:#aaa">${it.norma||''}</span></div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <span class="mat-stock ${qClass}">${qStr}</span><br>
+          <span style="font-size:10px;color:#aaa">${it.zdroj_dl||''}</span>
+        </div>
+      </div>`;
+    }).join('');
+  } else if (!mtoItems.length) {
+    html += '<div style="text-align:center;padding:30px;color:#aaa;font-size:12px">Žiadne položky</div>';
   }
 
-  el.innerHTML = filtered.map(it => {
-    const realIdx = items.indexOf(it);
-    const q = parseFloat(it.zostatok)||0;
-    const qClass = q<=0?'qty-zero':q<3?'qty-low':'qty-ok';
-    const qStr = it.jednotka==='m'?q.toFixed(2)+' m':q+' ks';
-    return `<div class="vyd-mat-row" onclick="addToVydajka(${realIdx})">
-      <div class="mat-info">
-        <div><span class="badge badge-${typClass(it.typ)}">${shortType(it.typ)}</span>
-          <span class="mat-rozmer" style="margin-left:6px">${it.rozmer}</span></div>
-        <div class="mat-typ">${it.typ}</div>
-        <div class="mat-tavba">Tavba: <strong>${it.tavba||'—'}</strong> &nbsp;|&nbsp; ${it.material||''} &nbsp;|&nbsp; <span style="color:#aaa">${it.norma||''}</span></div>
-      </div>
-      <div style="text-align:right;flex-shrink:0">
-        <span class="mat-stock ${qClass}">${qStr}</span><br>
-        <span style="font-size:10px;color:#aaa">${it.zdroj_dl||''}</span>
-      </div>
-    </div>`;
-  }).join('');
+  el.innerHTML = html;
+}
+
+// ─── PRIDAŤ MTO POLOŽKU DO VÝDAJKY ────────────
+function addMTOToVydajka(mtoIdx) {
+  if (!vydIso) { alert('Najprv vyberte izometriu'); return; }
+  var m = (window._currentMTOItems||[])[mtoIdx];
+  if (!m) return;
+
+  var dims = extractDimsFromPopis(m.popis);
+  var mat  = extractMaterialFromPopis(m.popis);
+  var isPipe = m.weldType === 'PIPE';
+
+  vydLines.push({
+    itemIdx: null,        // nie zo skladu — z MTO
+    typ: m.weldType,
+    rozmer: dims.size || m.dn,
+    material: mat,
+    norma: '',
+    tavba: '',
+    jednotka: isPipe ? 'm' : 'ks',
+    stockMax: 0,
+    vydQty: isPipe ? 0 : 1,
+    dlzka: '',
+    spCislo: '',
+    isPipe: isPipe,
+    fromMTO: true,
+    mtoPN: m.poz,
+    mtoPopis: m.popis,
+    mtoMN: m.mn
+  });
+
+  const panel = document.getElementById('vyd-lines-panel');
+  panel.style.display = 'flex';
+  panel.style.flexDirection = 'column';
+  appendVydRow(vydLines.length - 1);
+  updateVydCount();
+  updateHasPipeCols();
 }
 
 // ─── PRIDAŤ DO VÝDAJKY ────────────────────────
@@ -1517,36 +1783,134 @@ function exportVydajkaPdf(v) {
 }
 
 function openVydNahladFromData(v) {
-  // Rovnaký render ako openVydNahlad ale z uložených dát
   const hasPipe = v.lines.some(l => l.isPipe);
   let pos = 1;
+
   const rows = v.lines.map(l => {
-    const mmCell = l.isPipe && l.dlzka ? `<br><span style="color:#888;font-size:9px">${l.dlzka} mm</span>` : '';
     const spCell = l.isPipe ? (l.spCislo||'') : '';
     const vydane = l.isPipe
       ? (typeof l.vydQty === 'number' ? l.vydQty.toFixed(3) : l.vydQty)
       : l.vydQty;
-    return `<tr>
-      <td class="c"></td>
-      <td class="c">${pos++}</td>
-      <td>${l.typ}</td>
-      <td>${l.norma||''}</td>
-      <td class="mono">${l.rozmer}${mmCell}</td>
-      <td class="mono">${l.material||''}</td>
-      <td class="c">—</td>
-      <td class="c bold">${vydane}</td>
-      <td class="c">${v.datum}</td>
-      <td></td>
-      <td class="mono">${l.tavba||''}</td>
-      ${hasPipe ? `<td class="c">${spCell}</td>` : ''}
-    </tr>`;
+    const rozmerCell = l.rozmer + (l.isPipe && l.dlzka ? '<br><small style="color:#888">' + l.dlzka + ' mm</small>' : '');
+    return '<tr>' +
+      '<td class="tc"></td>' +
+      '<td class="tc">' + pos++ + '</td>' +
+      '<td>' + (l.typ||'') + '</td>' +
+      '<td style="font-size:10px">' + (l.norma||'') + '</td>' +
+      '<td class="tm">' + rozmerCell + '</td>' +
+      '<td class="tm">' + (l.material||'') + '</td>' +
+      '<td class="tc">—</td>' +
+      '<td class="tc tb">' + vydane + '</td>' +
+      '<td class="tc">' + v.datum + '</td>' +
+      '<td></td>' +
+      '<td class="tm">' + (l.tavba||'') + '</td>' +
+      (hasPipe ? '<td class="tc">' + spCell + '</td>' : '') +
+      '</tr>';
   }).join('');
 
   const thPipe = hasPipe ? '<th>SP No.</th>' : '';
-  const html = buildVydPdfHtml(v.cislo, v.iso, v.sec||'', v.datum, rows, thPipe);
-  const win = window.open('', '_blank', 'width=1100,height=700,scrollbars=yes');
-  win.document.write(html);
-  win.document.close();
+
+  // Vytvor alebo reuse overlay
+  var overlay = document.getElementById('nahlad-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'nahlad-overlay';
+    document.body.appendChild(overlay);
+  }
+
+  overlay.style.cssText = 'display:flex;position:fixed;inset:0;background:#1a1a2e;z-index:8000;flex-direction:column';
+  overlay.innerHTML =
+    // Toolbar
+    '<div style="background:#1a1a2e;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0;border-bottom:1px solid #2a3a5c">' +
+      '<span style="color:#fff;font-weight:700;font-size:14px">📋 ' + (v.cislo||'') + '</span>' +
+      '<span style="color:#9a9bb0;font-size:12px;font-family:monospace">' + (v.iso||'') + '</span>' +
+      '<div style="flex:1"></div>' +
+      '<button onclick="window.print()" style="padding:8px 20px;background:#27ae60;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;font-weight:700">🖨️ Tlačiť / PDF</button>' +
+      '<button onclick="document.getElementById(\'nahlad-overlay\').style.display=\'none\'" style="padding:8px 16px;background:#374151;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;margin-left:8px">✕ Zavrieť</button>' +
+    '</div>' +
+    // Obsah
+    '<div id="nahlad-content" style="flex:1;overflow-y:auto;background:#e8eaed;padding:16px">' +
+      '<div style="background:#fff;width:100%;margin:0 auto;padding:16px 20px;box-shadow:0 2px 12px rgba(0,0,0,0.15);border-radius:4px">' +
+        // Hlavička dokumentu
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;border-bottom:2px solid #1a1a2e;padding-bottom:8px;flex-wrap:wrap;gap:10px">' +
+          '<div>' +
+            '<div style="font-size:clamp(13px,2vw,18px);font-weight:700;color:#1a1a2e;letter-spacing:0.04em">FABRICATION MATERIALS ISSUE SLIP</div>' +
+            '<div style="font-size:clamp(10px,1.3vw,12px);color:#666;margin-top:2px">WarehousePro · Výdajka materiálu z výrobného skladu</div>' +
+          '</div>' +
+          '<div style="text-align:right;font-size:clamp(10px,1.3vw,12px);color:#444;line-height:1.8">' +
+            '<strong>Projekt:</strong> ' + (window._currentProject ? window._currentProject.name || window._currentProject.id : '—') + '<br>' +
+            '<strong>Izometria:</strong> ' + (v.iso||'—') + '<br>' +
+            '<strong>Dátum:</strong> ' + v.datum +
+          '</div>' +
+        '</div>' +
+        // Section bar
+        '<div style="background:#1a1a2e;color:#fff;font-size:clamp(10px,1.2vw,12px);font-weight:700;letter-spacing:0.08em;padding:5px 10px;text-transform:uppercase;margin-bottom:0">FABRICATION MATERIALS</div>' +
+        // Tabuľka - responzívna
+        '<div style="overflow-x:auto">' +
+        '<table style="width:100%;border-collapse:collapse;font-size:clamp(10px,1.3vw,13px);table-layout:auto">' +
+          '<thead><tr style="background:#2c3e6b">' +
+            '<th style="padding:clamp(4px,0.8vw,7px) clamp(4px,0.6vw,8px);color:#e0e8ff;text-align:left;font-size:clamp(8px,1vw,11px);text-transform:uppercase;border:1px solid #1a1a2e;white-space:nowrap">Page</th>' +
+            '<th style="padding:clamp(4px,0.8vw,7px) clamp(4px,0.6vw,8px);color:#e0e8ff;text-align:left;font-size:clamp(8px,1vw,11px);text-transform:uppercase;border:1px solid #1a1a2e;white-space:nowrap">Pos.</th>' +
+            '<th style="padding:clamp(4px,0.8vw,7px) clamp(4px,0.6vw,8px);color:#e0e8ff;text-align:left;font-size:clamp(8px,1vw,11px);text-transform:uppercase;border:1px solid #1a1a2e">Part Description</th>' +
+            '<th style="padding:clamp(4px,0.8vw,7px) clamp(4px,0.6vw,8px);color:#e0e8ff;text-align:left;font-size:clamp(8px,1vw,11px);text-transform:uppercase;border:1px solid #1a1a2e">Standard</th>' +
+            '<th style="padding:clamp(4px,0.8vw,7px) clamp(4px,0.6vw,8px);color:#e0e8ff;text-align:left;font-size:clamp(8px,1vw,11px);text-transform:uppercase;border:1px solid #1a1a2e;white-space:nowrap">Dimensions</th>' +
+            '<th style="padding:clamp(4px,0.8vw,7px) clamp(4px,0.6vw,8px);color:#e0e8ff;text-align:left;font-size:clamp(8px,1vw,11px);text-transform:uppercase;border:1px solid #1a1a2e;white-space:nowrap">Material</th>' +
+            '<th style="padding:clamp(4px,0.8vw,7px) clamp(4px,0.6vw,8px);color:#e0e8ff;text-align:center;font-size:clamp(8px,1vw,11px);text-transform:uppercase;border:1px solid #1a1a2e;white-space:nowrap">QTY Izom.</th>' +
+            '<th style="padding:clamp(4px,0.8vw,7px) clamp(4px,0.6vw,8px);color:#e0e8ff;text-align:center;font-size:clamp(8px,1vw,11px);text-transform:uppercase;border:1px solid #1a1a2e;white-space:nowrap">Issued QTY</th>' +
+            '<th style="padding:clamp(4px,0.8vw,7px) clamp(4px,0.6vw,8px);color:#e0e8ff;text-align:center;font-size:clamp(8px,1vw,11px);text-transform:uppercase;border:1px solid #1a1a2e;white-space:nowrap">Date</th>' +
+            '<th style="padding:clamp(4px,0.8vw,7px) clamp(4px,0.6vw,8px);color:#e0e8ff;text-align:left;font-size:clamp(8px,1vw,11px);text-transform:uppercase;border:1px solid #1a1a2e;white-space:nowrap">Name</th>' +
+            '<th style="padding:clamp(4px,0.8vw,7px) clamp(4px,0.6vw,8px);color:#e0e8ff;text-align:left;font-size:clamp(8px,1vw,11px);text-transform:uppercase;border:1px solid #1a1a2e;white-space:nowrap">Heat Number</th>' +
+            (hasPipe ? '<th style="padding:clamp(4px,0.8vw,7px) clamp(4px,0.6vw,8px);color:#e0e8ff;text-align:center;font-size:clamp(8px,1vw,11px);text-transform:uppercase;border:1px solid #1a1a2e;white-space:nowrap">SP No.</th>' : '') +
+          '</tr></thead>' +
+          '<tbody id="nahlad-tbody"></tbody>' +
+        '</table></div>' +
+        // Footer podpisy
+        '<div style="margin-top:16px;display:flex;gap:20px;font-size:clamp(10px,1.2vw,12px);color:#666;border-top:1px solid #ccc;padding-top:10px;flex-wrap:wrap">' +
+          '<div style="flex:1;min-width:140px"><div style="border-bottom:1px solid #999;height:30px;margin-bottom:4px"></div>Vydal / Issued by</div>' +
+          '<div style="flex:1;min-width:140px"><div style="border-bottom:1px solid #999;height:30px;margin-bottom:4px"></div>Prevzal / Received by</div>' +
+          '<div style="flex:1;min-width:140px"><div style="border-bottom:1px solid #999;height:30px;margin-bottom:4px"></div>Dátum prevzatia / Date received</div>' +
+          '<div style="flex:2;text-align:right;color:#ccc;font-size:10px;align-self:flex-end;min-width:120px">WarehousePro · ' + new Date().toLocaleString('sk-SK') + '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  // Vložiť riadky s responzívnymi štýlmi
+  const tdBase = 'style="padding:clamp(3px,0.6vw,6px) clamp(3px,0.5vw,8px);border:1px solid #d0d4dc;font-size:clamp(10px,1.2vw,13px)"';
+  const tdCenter = 'style="padding:clamp(3px,0.6vw,6px) clamp(3px,0.5vw,8px);border:1px solid #d0d4dc;font-size:clamp(10px,1.2vw,13px);text-align:center"';
+  const tdMono = 'style="padding:clamp(3px,0.6vw,6px) clamp(3px,0.5vw,8px);border:1px solid #d0d4dc;font-size:clamp(9px,1.1vw,12px);font-family:monospace"';
+  const tdBold = 'style="padding:clamp(3px,0.6vw,6px) clamp(3px,0.5vw,8px);border:1px solid #d0d4dc;font-size:clamp(11px,1.4vw,15px);text-align:center;font-weight:700"';
+
+  var tbodyHtml = v.lines.map(function(l, i) {
+    var vydane = l.isPipe
+      ? (typeof l.vydQty === 'number' ? l.vydQty.toFixed(3) : l.vydQty)
+      : l.vydQty;
+    var rozmerCell = (l.rozmer||'') + (l.isPipe && l.dlzka ? '<br><span style="color:#888;font-size:0.85em">' + l.dlzka + ' mm</span>' : '');
+    var bg = i%2===1 ? 'background:#f4f6fb;' : '';
+    return '<tr style="' + bg + '">' +
+      '<td ' + tdCenter + '></td>' +
+      '<td ' + tdCenter + '>' + (i+1) + '</td>' +
+      '<td ' + tdBase + '>' + (l.typ||'') + '</td>' +
+      '<td ' + tdBase + ' style="padding:clamp(3px,0.6vw,6px) clamp(3px,0.5vw,8px);border:1px solid #d0d4dc;font-size:clamp(9px,1vw,11px)">' + (l.norma||'') + '</td>' +
+      '<td ' + tdMono + '>' + rozmerCell + '</td>' +
+      '<td ' + tdMono + '>' + (l.material||'') + '</td>' +
+      '<td ' + tdCenter + '>—</td>' +
+      '<td ' + tdBold + '>' + vydane + '</td>' +
+      '<td ' + tdCenter + '>' + v.datum + '</td>' +
+      '<td ' + tdBase + '></td>' +
+      '<td ' + tdMono + '>' + (l.tavba||'') + '</td>' +
+      (hasPipe ? '<td ' + tdCenter + '>' + (l.spCislo||'') + '</td>' : '') +
+      '</tr>';
+  }).join('');
+  document.getElementById('nahlad-tbody').innerHTML = tbodyHtml;
+
+  // Štýly pre tlač
+  var printStyle = document.getElementById('nahlad-print-style');
+  if (!printStyle) {
+    printStyle = document.createElement('style');
+    printStyle.id = 'nahlad-print-style';
+    document.head.appendChild(printStyle);
+  }
+  printStyle.textContent = '@media print { body > *:not(#nahlad-overlay) { display:none !important; } #nahlad-overlay { position:static !important; } #nahlad-overlay > div:first-child { display:none !important; } #nahlad-content { overflow:visible !important; padding:0 !important; background:white !important; } }';
 }
 
 function buildVydPdfHtml(cislo, iso, sec, datum, rows, thPipe) {
@@ -1555,74 +1919,60 @@ function buildVydPdfHtml(cislo, iso, sec, datum, rows, thPipe) {
 <style>
   @page { size: A4 landscape; margin: 10mm 12mm; }
   * { box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; font-size: 10px; background: #fff; margin: 0; padding: 0; }
-  .page { width: 100%; padding: 4px; }
-  .doc-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 6px; border-bottom: 2px solid #1a1a2e; padding-bottom: 6px; }
-  .doc-title { font-size: 14px; font-weight: 700; letter-spacing: 0.04em; color: #1a1a2e; }
-  .doc-sub { font-size: 9px; color: #666; margin-top: 2px; }
-  .doc-meta { text-align: right; font-size: 9px; color: #444; line-height: 1.7; }
+  body { font-family: Arial, sans-serif; font-size: 11px; background: #fff; margin: 0; padding: 12px 16px; }
+  .doc-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; border-bottom: 2px solid #1a1a2e; padding-bottom: 8px; }
+  .doc-title { font-size: 16px; font-weight: 700; letter-spacing: 0.04em; color: #1a1a2e; }
+  .doc-sub { font-size: 11px; color: #666; margin-top: 3px; }
+  .doc-meta { text-align: right; font-size: 11px; color: #444; line-height: 1.8; }
   .doc-meta strong { color: #1a1a2e; }
-  .section-bar { background: #1a1a2e; color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; padding: 4px 8px; text-transform: uppercase; }
-  table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
-  thead th { background: #2c3e6b; color: #e0e8ff; padding: 5px 6px; text-align: left; font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid #1a1a2e; white-space: nowrap; }
-  td { padding: 4px 6px; border: 1px solid #d0d4dc; vertical-align: middle; }
+  .section-bar { background: #1a1a2e; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 5px 10px; text-transform: uppercase; margin-bottom: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  thead th { background: #2c3e6b; color: #e0e8ff; padding: 6px 8px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid #1a1a2e; white-space: nowrap; }
+  td { padding: 5px 8px; border: 1px solid #d0d4dc; vertical-align: middle; }
   tbody tr:nth-child(even) td { background: #f4f6fb; }
+  tbody tr:hover td { background: #eef2ff; }
   td.c { text-align: center; }
-  td.mono { font-family: 'Courier New', monospace; font-size: 9px; }
-  td.bold { font-weight: 700; font-size: 11px; }
-  .doc-footer { margin-top: 10px; display: flex; gap: 30px; font-size: 9px; color: #666; border-top: 1px solid #ccc; padding-top: 6px; }
+  td.mono { font-family: 'Courier New', monospace; font-size: 10px; }
+  td.bold { font-weight: 700; font-size: 12px; }
+  .doc-footer { margin-top: 16px; display: flex; gap: 30px; font-size: 10px; color: #666; border-top: 1px solid #ccc; padding-top: 8px; }
   .sign-box { flex: 1; }
-  .sign-line { border-bottom: 1px solid #999; height: 24px; margin-bottom: 3px; }
-  .print-bar { background: #1a1a2e; padding: 10px 16px; display: flex; align-items: center; gap: 10px; }
-  .print-bar button { padding: 8px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 13px; font-weight: 700; }
-  .btn-print { background: #27ae60; color: #fff; }
-  .btn-close { background: #e4e8ef; color: #333; }
-  @media print { .print-bar { display: none !important; } }
+  .sign-line { border-bottom: 1px solid #999; height: 28px; margin-bottom: 4px; }
+  @media print { body { padding: 0; } }
 </style></head><body>
-<div class="print-bar">
-  <span style="color:#fff;font-weight:700;font-size:14px">📋 ${cislo}</span>
-  <span style="color:#9a9bb0;font-size:12px">· ${iso}</span>
-  <div style="flex:1"></div>
-  <button class="btn-print" onclick="window.print()">🖨️ Tlačiť / Uložiť PDF</button>
-  <button class="btn-close" onclick="window.close()">✕ Zavrieť</button>
+<div class="doc-header">
+  <div>
+    <div class="doc-title">FABRICATION MATERIALS ISSUE SLIP</div>
+    <div class="doc-sub">WarehousePro &nbsp;·&nbsp; Výdajka materiálu z výrobného skladu</div>
+  </div>
+  <div class="doc-meta">
+    <strong>Projekt:</strong> ${window._currentProject ? window._currentProject.name || window._currentProject.id : '—'}<br>
+    <strong>Izometria:</strong> ${iso}<br>
+    <strong>Dátum:</strong> ${datum}
+  </div>
 </div>
-<div class="page">
-  <div class="doc-header">
-    <div>
-      <div class="doc-title">FABRICATION MATERIALS ISSUE SLIP</div>
-      <div class="doc-sub">PMP Montex s.r.o. &nbsp;·&nbsp; Výdajka materiálu z výrobného skladu</div>
-    </div>
-    <div class="doc-meta">
-      <strong>Číslo výdajky:</strong> ${cislo}<br>
-      <strong>Izometria:</strong> ${iso}<br>
-      <strong>Sekcia:</strong> ${sec||'—'}<br>
-      <strong>Dátum:</strong> ${datum}
-    </div>
-  </div>
-  <div class="section-bar">FABRICATION MATERIALS</div>
-  <table>
-    <thead><tr>
-      <th style="width:22px">Page</th>
-      <th style="width:28px">Pos.</th>
-      <th style="min-width:140px">Part Description</th>
-      <th style="min-width:120px">Standard</th>
-      <th style="min-width:90px">Dimensions</th>
-      <th style="width:70px">Material</th>
-      <th style="width:55px">QTY Izom.</th>
-      <th style="width:60px">Issued QTY</th>
-      <th style="width:65px">Date</th>
-      <th style="width:60px">Name</th>
-      <th style="min-width:80px">Heat Number</th>
-      ${thPipe}
-    </tr></thead>
-    <tbody>${rows}</tbody>
-  </table>
-  <div class="doc-footer">
-    <div class="sign-box"><div class="sign-line"></div>Vydal / Issued by</div>
-    <div class="sign-box"><div class="sign-line"></div>Prevzal / Received by</div>
-    <div class="sign-box"><div class="sign-line"></div>Dátum prevzatia / Date received</div>
-    <div style="flex:2;text-align:right;color:#bbb;font-size:8px">Generované: ${new Date().toLocaleString('sk-SK')} &nbsp;·&nbsp; SkaldManager v0.2</div>
-  </div>
+<div class="section-bar">FABRICATION MATERIALS</div>
+<table>
+  <thead><tr>
+    <th style="width:24px">Page</th>
+    <th style="width:30px">Pos.</th>
+    <th style="min-width:150px">Part Description</th>
+    <th style="min-width:130px">Standard</th>
+    <th style="min-width:90px">Dimensions</th>
+    <th style="width:75px">Material</th>
+    <th style="width:60px">QTY Izom.</th>
+    <th style="width:65px">Issued QTY</th>
+    <th style="width:70px">Date</th>
+    <th style="width:65px">Name</th>
+    <th style="min-width:90px">Heat Number</th>
+    ${thPipe}
+  </tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="doc-footer">
+  <div class="sign-box"><div class="sign-line"></div>Vydal / Issued by</div>
+  <div class="sign-box"><div class="sign-line"></div>Prevzal / Received by</div>
+  <div class="sign-box"><div class="sign-line"></div>Dátum prevzatia / Date received</div>
+  <div style="flex:2;text-align:right;color:#bbb;font-size:9px">Generované: ${new Date().toLocaleString('sk-SK')} &nbsp;·&nbsp; WarehousePro · WarehousePro</div>
 </div>
 </body></html>`;
 }
@@ -2046,20 +2396,29 @@ function addFromTavbaScanner(itemIdx) {
 <!-- ═══════════════════════════════════════════════════════ -->
 <!-- LOGIN SCREEN -->
 <div id="login-screen" style="display:none;position:fixed;inset:0;background:#0f1729;z-index:9000;align-items:center;justify-content:center;flex-direction:column">
-  <div style="text-align:center;margin-bottom:32px">
-    <h1 style="color:#fff;font-size:28px;font-weight:700;letter-spacing:0.04em">Warehouse <span style="color:#4f7cff">Manager</span></h1>
-    <div style="color:#9a9bb0;font-size:13px;margin-top:6px">Prihlásenie do systému</div>
+  <!-- Jazyky -->
+  <div style="position:absolute;top:18px;right:18px;display:flex;gap:4px;background:rgba(255,255,255,0.06);border-radius:8px;padding:4px">
+    <button onclick="setLang('sk')" id="langBtn_sk" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:5px;opacity:1" title="Slovenčina">🇸🇰</button>
+    <button onclick="setLang('en')" id="langBtn_en" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:5px;opacity:0.45" title="English">🇬🇧</button>
+    <button onclick="setLang('de')" id="langBtn_de" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:5px;opacity:0.45" title="Deutsch">🇩🇪</button>
+    <button onclick="setLang('uk')" id="langBtn_uk" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:5px;opacity:0.45" title="Українська">🇺🇦</button>
   </div>
+  <!-- Logo -->
+  <div style="text-align:center;margin-bottom:32px">
+    <h1 style="color:#fff;font-size:30px;font-weight:700;letter-spacing:0.04em">Warehouse <span style="color:#4f7cff">Manager</span></h1>
+    <div id="login-subtitle" style="color:#9a9bb0;font-size:13px;margin-top:6px">Prihlásenie do systému</div>
+  </div>
+  <!-- Formulár -->
   <div style="background:#1a2540;border-radius:12px;padding:32px;width:340px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,0.4)">
     <div style="margin-bottom:18px">
-      <label style="font-size:12px;color:#9a9bb0;display:block;margin-bottom:6px">EMAIL</label>
-      <input id="login-email" type="email" placeholder="meno@firma.sk" autocomplete="username"
+      <label id="login-label-name" style="font-size:11px;color:#9a9bb0;display:block;margin-bottom:6px;letter-spacing:0.08em">MENO</label>
+      <input id="login-name" type="text" placeholder="Martin Kolcar" autocomplete="username" autocapitalize="words"
         style="width:100%;padding:11px 14px;background:#0f1729;border:1px solid #2a3a5c;border-radius:7px;color:#fff;font-size:14px;outline:none"
         onfocus="this.style.borderColor='#4f7cff'" onblur="this.style.borderColor='#2a3a5c'"
         onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()">
     </div>
     <div style="margin-bottom:24px">
-      <label style="font-size:12px;color:#9a9bb0;display:block;margin-bottom:6px">HESLO</label>
+      <label id="login-label-pass" style="font-size:11px;color:#9a9bb0;display:block;margin-bottom:6px;letter-spacing:0.08em">HESLO</label>
       <input id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password"
         style="width:100%;padding:11px 14px;background:#0f1729;border:1px solid #2a3a5c;border-radius:7px;color:#fff;font-size:14px;outline:none"
         onfocus="this.style.borderColor='#4f7cff'" onblur="this.style.borderColor='#2a3a5c'"
@@ -2067,7 +2426,7 @@ function addFromTavbaScanner(itemIdx) {
     </div>
     <button onclick="doLogin()" id="login-btn"
       style="width:100%;padding:12px;background:#4f7cff;color:#fff;border:none;border-radius:7px;font-size:14px;font-weight:700;cursor:pointer;transition:background 0.15s">
-      Prihlásiť sa
+      <span id="login-btn-text">Prihlásiť sa</span>
     </button>
     <div id="login-err" style="display:none;margin-top:14px;padding:10px 14px;background:rgba(231,76,60,0.15);border:1px solid rgba(231,76,60,0.3);border-radius:6px;color:#e74c3c;font-size:12px;text-align:center"></div>
   </div>
@@ -2097,6 +2456,7 @@ function addFromTavbaScanner(itemIdx) {
     <div style="display:flex;border-bottom:1px solid #e4e8ef;flex-shrink:0">
       <button class="admin-tab active" id="tab-projects" onclick="switchAdminTab('projects')" style="padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:#4f7cff;border-bottom:2px solid #4f7cff">Projekty</button>
       <button class="admin-tab" id="tab-users" onclick="switchAdminTab('users')" style="padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;color:#666;border-bottom:2px solid transparent">Používatelia</button>
+      <button class="admin-tab" id="tab-isos" onclick="switchAdminTab('isos')" style="padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;color:#666;border-bottom:2px solid transparent">Izometrie</button>
     </div>
     <div id="admin-body" style="flex:1;overflow-y:auto;padding:18px"></div>
   </div>
@@ -2114,11 +2474,135 @@ function addFromTavbaScanner(itemIdx) {
 </style>
 
 <script>
-// ═══════════════════════════ AUTH + PROJEKTY ═══════════════════════════
+// ═══════════════════════════ JAZYKY ═══════════════════════════
+const LANGS = {
+  sk: {
+    subtitle:'Prihlásenie do systému', name:'MENO', pass:'HESLO', login:'Prihlásiť sa', logging:'...', errWrong:'Nesprávne meno alebo heslo', errEmpty:'Zadajte meno a heslo',
+    logout:'Odhlásiť sa', switchProj:'Prepnúť projekt', projects:'Projekty', users:'Používatelia', newProj:'+ Nový projekt', projName:'Názov projektu', projDesc:'Popis (voliteľné)', create:'Vytvoriť', close:'Zavrieť', isos:'Izometrie', uploadPdf:'📄 Nahrať PDF izometrie', deleteProj:'Vymazať projekt',
+    importBtn:'📂 Nahrať dodací list (.docx)', addManual:'+ Pridať ručne', exportCsv:'⬇ Export CSV', vydajky:'📋 Výdajky', deleteAll:'🗑 Vymazať všetko', migrateBtn:'☁ Preniesť do cloudu',
+    typLabel:'Typ:', rozmerLabel:'Rozmer:', materialLabel:'Materiál:', clearFilter:'× Vyčistiť', tavbaLabel:'Tavba:',
+    allTypes:'— všetky typy —', allSizes:'— všetky rozmery —', allMats:'— všetky materiály —',
+    ready:'Pripravený. Nahrajte dodací list (.docx).', emptyWarehouse:'Sklad je prázdny. Nahrajte dodací list.', noResults:'Žiadne výsledky pre filter.',
+    colTyp:'TYP', colRozmer:'ROZMER', colMaterial:'MATERIÁL', colNorma:'NORMA', colZostatok:'ZOSTATOK', colJed:'JED.', colPozn:'POZN.', colTavba:'TAVBA', colDl:'DODACÍ LIST', colDatum:'DÁTUM', colAkcie:'AKCIE',
+    novaVydajka:'📋 Nová výdajka', importPreview:'Skontrolujte a potvrďte.', merge:'Zlúčiť s existujúcimi', importBtn2:'✓ Importovať do skladu', cancelBtn:'Zrušiť',
+    searchIso:'Hľadaj izometriu...', allSections:'Všetky sekcie', enterSearch:'Zadajte hľadaný text alebo vyberte sekciu', selectIso:'Vyberte izometriu',
+    vydTitle:'Výdajka', vydNahlad:'👁 Náhľad', vydUlozPdf:'📄 Uložiť + PDF', vydUloz:'💾 Uložiť', vydZavr:'✕ Zavrieť', vydZmenit:'↩ Zmeniť trasu',
+    thQtyIzo:'QTY IZOM.', thVydane:'VYDANÉ', thDlzka:'DĹŽKA (MM)', thSp:'SP Č.'
+  },
+  en: {
+    subtitle:'Sign in to the system', name:'NAME', pass:'PASSWORD', login:'Sign in', logging:'...', errWrong:'Incorrect name or password', errEmpty:'Enter name and password',
+    logout:'Sign out', switchProj:'Switch project', projects:'Projects', users:'Users', newProj:'+ New project', projName:'Project name', projDesc:'Description (optional)', create:'Create', close:'Close', isos:'Isometries', uploadPdf:'📄 Upload PDF isometries', deleteProj:'Delete project',
+    importBtn:'📂 Upload delivery list (.docx)', addManual:'+ Add manually', exportCsv:'⬇ Export CSV', vydajky:'📋 Issue slips', deleteAll:'🗑 Delete all', migrateBtn:'☁ Migrate to cloud',
+    typLabel:'Type:', rozmerLabel:'Size:', materialLabel:'Material:', clearFilter:'× Clear', tavbaLabel:'Heat No.:',
+    allTypes:'— all types —', allSizes:'— all sizes —', allMats:'— all materials —',
+    ready:'Ready. Upload delivery list (.docx).', emptyWarehouse:'Warehouse empty. Upload delivery list.', noResults:'No results for filter.',
+    colTyp:'TYPE', colRozmer:'SIZE', colMaterial:'MATERIAL', colNorma:'STANDARD', colZostatok:'STOCK', colJed:'UNIT', colPozn:'NOTE', colTavba:'HEAT NO.', colDl:'DELIVERY LIST', colDatum:'DATE', colAkcie:'ACTIONS',
+    novaVydajka:'📋 New issue slip', importPreview:'Review and confirm.', merge:'Merge with existing', importBtn2:'✓ Import to warehouse', cancelBtn:'Cancel',
+    searchIso:'Search isometry...', allSections:'All sections', enterSearch:'Enter search text or select section', selectIso:'Select isometry',
+    vydTitle:'Issue Slip', vydNahlad:'👁 Preview', vydUlozPdf:'📄 Save + PDF', vydUloz:'💾 Save', vydZavr:'✕ Close', vydZmenit:'↩ Change route',
+    thQtyIzo:'QTY ISOM.', thVydane:'ISSUED', thDlzka:'LENGTH (MM)', thSp:'SP NO.'
+  },
+  de: {
+    subtitle:'Anmeldung am System', name:'NAME', pass:'PASSWORT', login:'Anmelden', logging:'...', errWrong:'Falscher Name oder Passwort', errEmpty:'Name und Passwort eingeben',
+    logout:'Abmelden', switchProj:'Projekt wechseln', projects:'Projekte', users:'Benutzer', newProj:'+ Neues Projekt', projName:'Projektname', projDesc:'Beschreibung (optional)', create:'Erstellen', close:'Schließen', isos:'Isometrien', uploadPdf:'📄 PDF hochladen', deleteProj:'Projekt löschen',
+    importBtn:'📂 Lieferschein laden (.docx)', addManual:'+ Manuell hinzufügen', exportCsv:'⬇ CSV exportieren', vydajky:'📋 Ausgabescheine', deleteAll:'🗑 Alles löschen', migrateBtn:'☁ In Cloud übertragen',
+    typLabel:'Typ:', rozmerLabel:'Größe:', materialLabel:'Material:', clearFilter:'× Löschen', tavbaLabel:'Schmelze:',
+    allTypes:'— alle Typen —', allSizes:'— alle Größen —', allMats:'— alle Materialien —',
+    ready:'Bereit. Lieferschein hochladen.', emptyWarehouse:'Lager leer. Lieferschein hochladen.', noResults:'Keine Ergebnisse.',
+    colTyp:'TYP', colRozmer:'GRÖßE', colMaterial:'MATERIAL', colNorma:'NORM', colZostatok:'BESTAND', colJed:'EINH.', colPozn:'NOTIZ', colTavba:'SCHMELZE', colDl:'LIEFERSCHEIN', colDatum:'DATUM', colAkcie:'AKTIONEN',
+    novaVydajka:'📋 Neuer Ausgabeschein', importPreview:'Überprüfen und bestätigen.', merge:'Mit bestehenden zusammenführen', importBtn2:'✓ Importieren', cancelBtn:'Abbrechen',
+    searchIso:'Isometrie suchen...', allSections:'Alle Sektionen', enterSearch:'Suchtext eingeben oder Sektion wählen', selectIso:'Isometrie wählen',
+    vydTitle:'Ausgabeschein', vydNahlad:'👁 Vorschau', vydUlozPdf:'📄 Speichern + PDF', vydUloz:'💾 Speichern', vydZavr:'✕ Schließen', vydZmenit:'↩ Route ändern',
+    thQtyIzo:'MENGE ISO.', thVydane:'AUSGEGEBEN', thDlzka:'LÄNGE (MM)', thSp:'SP NR.'
+  },
+  uk: {
+    subtitle:'Вхід до системи', name:'ІМЯ', pass:'ПАРОЛЬ', login:'Увійти', logging:'...', errWrong:'Невірне імя або пароль', errEmpty:'Введіть імя та пароль',
+    logout:'Вийти', switchProj:'Змінити проект', projects:'Проекти', users:'Користувачі', newProj:'+ Новий проект', projName:'Назва проекту', projDesc:'Опис', create:'Створити', close:'Закрити', isos:'Ізометрії', uploadPdf:'📄 PDF ізометрії', deleteProj:'Видалити проект',
+    importBtn:'📂 Завантажити накладну (.docx)', addManual:'+ Додати вручну', exportCsv:'⬇ Експорт CSV', vydajky:'📋 Видаткові', deleteAll:'🗑 Видалити все', migrateBtn:'☁ Перенести в хмару',
+    typLabel:'Тип:', rozmerLabel:'Розмір:', materialLabel:'Матеріал:', clearFilter:'× Очистити', tavbaLabel:'Плавка:',
+    allTypes:'— всі типи —', allSizes:'— всі розміри —', allMats:'— всі матеріали —',
+    ready:'Готово. Завантажте накладну.', emptyWarehouse:'Склад порожній. Завантажте накладну.', noResults:'Немає результатів.',
+    colTyp:'ТИП', colRozmer:'РОЗМІР', colMaterial:'МАТЕРІАЛ', colNorma:'НОРМА', colZostatok:'ЗАЛИШОК', colJed:'ОД.', colPozn:'ПРИМ.', colTavba:'ПЛАВКА', colDl:'НАКЛАДНА', colDatum:'ДАТА', colAkcie:'ДІЇ',
+    novaVydajka:'📋 Нова видаткова', importPreview:'Перевірте та підтвердіть.', merge:'Обєднати з існуючими', importBtn2:'✓ Імпортувати', cancelBtn:'Скасувати',
+    searchIso:'Пошук ізометрії...', allSections:'Всі секції', enterSearch:'Введіть текст або оберіть секцію', selectIso:'Оберіть ізометрію',
+    vydTitle:'Видаткова', vydNahlad:'👁 Перегляд', vydUlozPdf:'📄 Зберегти + PDF', vydUloz:'💾 Зберегти', vydZavr:'✕ Закрити', vydZmenit:'↩ Змінити маршрут',
+    thQtyIzo:'К-ТЬ ІЗО.', thVydane:'ВИДАНО', thDlzka:'ДОВЖИНА (ММ)', thSp:'СП №'
+  }
+};
+var _lang = localStorage.getItem('wmLang') || 'sk';
+function t(k){ return (LANGS[_lang]||LANGS.sk)[k]||k; }
+function setLang(l){
+  _lang = l; localStorage.setItem('wmLang', l);
+  ['sk','en','de','uk'].forEach(function(x){
+    var b=document.getElementById('langBtn_'+x);
+    if(b) b.style.opacity = x===l ? '1' : '0.4';
+    var hb=document.getElementById('hLangBtn_'+x);
+    if(hb) hb.style.opacity = x===l ? '1' : '0.4';
+  });
+  applyLang();
+}
+function applyLangLogin(){
+  var s=document.getElementById('login-subtitle'); if(s) s.textContent=t('subtitle');
+  var n=document.getElementById('login-label-name'); if(n) n.textContent=t('name');
+  var p=document.getElementById('login-label-pass'); if(p) p.textContent=t('pass');
+  var b=document.getElementById('login-btn-text'); if(b) b.textContent=t('login');
+}
 
-// Používatelia (uložení v Firebase /users)
-// Martin = admin, Isabel = user
-const ADMIN_EMAIL = 'martinkolcar@iso.sk';
+function applyLang() {
+  applyLangLogin();
+  var el;
+  // Toolbar
+  el=document.getElementById('btn-import');     if(el) el.childNodes[0] && el.childNodes.length ? el.innerHTML=t('importBtn') : null;
+  el=document.getElementById('btn-import');     if(el) el.textContent=t('importBtn');
+  el=document.getElementById('btn-add');        if(el) el.textContent=t('addManual');
+  el=document.getElementById('btn-csv');        if(el) el.textContent=t('exportCsv');
+  el=document.getElementById('btn-vydajky');    if(el) el.textContent=t('vydajky');
+  el=document.getElementById('btn-delete-all'); if(el) el.textContent=t('deleteAll');
+  el=document.getElementById('migrate-btn');    if(el) el.textContent=t('migrateBtn');
+  el=document.getElementById('btn-nova-vydajka'); if(el) el.textContent=t('novaVydajka');
+  // Filtre labely
+  el=document.getElementById('lbl-typ');    if(el) el.textContent=t('typLabel');
+  el=document.getElementById('lbl-rozmer'); if(el) el.textContent=t('rozmerLabel');
+  el=document.getElementById('lbl-mat');    if(el) el.textContent=t('materialLabel');
+  el=document.getElementById('lbl-tavba');  if(el) el.textContent=t('tavbaLabel');
+  el=document.getElementById('btn-clear-filter'); if(el) el.textContent=t('clearFilter');
+  // Select options — prvá option (všetky)
+  var ftyp=document.getElementById('f-typ');
+  if(ftyp && ftyp.options[0]) ftyp.options[0].text=t('allTypes');
+  var frozmer=document.getElementById('f-rozmer');
+  if(frozmer && frozmer.options[0]) frozmer.options[0].text=t('allSizes');
+  var fmat=document.getElementById('f-mat');
+  if(fmat && fmat.options[0]) fmat.options[0].text=t('allMats');
+  // Hlavička tabuľky
+  var cols=['colTyp','colRozmer','colMaterial','colNorma','colZostatok','colJed','colPozn','colTavba','colDl','colDatum','colAkcie'];
+  cols.forEach(function(k){ var e=document.getElementById('th-'+k); if(e) e.textContent=t(k); });
+  // Výdajka header
+  el=document.getElementById('vyd-title-text'); if(el) el.textContent=t('vydTitle');
+  el=document.getElementById('vyd-btn-nahlad'); if(el) el.textContent=t('vydNahlad');
+  el=document.getElementById('vyd-btn-pdf');    if(el) el.textContent=t('vydUlozPdf');
+  el=document.getElementById('vyd-btn-uloz');   if(el) el.textContent=t('vydUloz');
+  el=document.getElementById('vyd-btn-zavr');   if(el) el.textContent=t('vydZavr');
+  el=document.getElementById('vyd-zmenit-btn'); if(el) el.textContent=t('vydZmenit');
+  // ISO search placeholder
+  el=document.getElementById('vyd-iso-inp'); if(el) el.placeholder=t('searchIso');
+  // ISO sekcia select
+  var secSel=document.getElementById('vyd-sec-sel');
+  if(secSel && secSel.options[0]) secSel.options[0].text=t('allSections');
+  // Iso empty state
+  el=document.getElementById('vyd-iso-list');
+  if(el && el.innerHTML.includes('Zadajte')) el.innerHTML='<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">'+t('enterSearch')+'</div>';
+  // Výdajka tabuľka hlavičky
+  el=document.getElementById('vyd-th-qty'); if(el) el.textContent=t('thQtyIzo');
+  el=document.getElementById('vyd-th-vydane'); if(el) el.textContent=t('thVydane');
+  el=document.getElementById('vyd-th-dlzka'); if(el) el.textContent=t('thDlzka');
+  el=document.getElementById('vyd-th-sp'); if(el) el.textContent=t('thSp');
+  // Status
+  var st=document.getElementById('status-text');
+  if(st && (st.textContent.includes('Pripravený') || st.textContent.includes('Ready') || st.textContent.includes('Bereit') || st.textContent.includes('Готово'))) {
+    st.textContent=t('ready');
+  }
+}
+
 
 var _currentUser = null;   // { uid, email, name, role, projects[] }
 var _currentProject = null; // { id, name }
@@ -2127,6 +2611,8 @@ var _heartbeatTimer = null;
 // ─── Firebase init ────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', function() {
   document.getElementById('login-screen').style.display = 'flex';
+  applyLangLogin();
+  setLang(_lang);
 
   try {
     firebase.initializeApp({
@@ -2177,26 +2663,40 @@ window.addEventListener('DOMContentLoaded', function() {
 
 // ─── Login ─────────────────────────────────────────────────────────────
 function doLogin() {
-  var email = document.getElementById('login-email').value.trim().toLowerCase();
+  var name = (document.getElementById('login-name').value||'').trim();
   var pass  = document.getElementById('login-pass').value;
-  var err   = document.getElementById('login-err');
-  var btn   = document.getElementById('login-btn');
-  if (!email || !pass) { showLoginErr('Zadajte email a heslo'); return; }
-  btn.textContent = '...';
-  btn.disabled = true;
-  err.style.display = 'none';
-  window.auth.signInWithEmailAndPassword(email, pass)
-    .catch(function(e) {
-      btn.textContent = 'Prihlásiť sa'; btn.disabled = false;
-      showLoginErr('Nesprávny email alebo heslo');
+  var btn   = document.getElementById('login-btn-text');
+  if (!name || !pass) { showLoginErr(t('errEmpty')); return; }
+  btn.textContent = t('logging');
+  document.getElementById('login-btn').disabled = true;
+  document.getElementById('login-err').style.display = 'none';
+
+  // Nájdi používateľa podľa mena v DB (case-insensitive)
+  window.db.ref('users').once('value').then(function(snap) {
+    var users = snap.val() || {};
+    var found = null;
+    Object.entries(users).forEach(function(e) {
+      var u = e[1];
+      if ((u.name||'').toLowerCase() === name.toLowerCase() ||
+          (u.name||'').toLowerCase().startsWith(name.toLowerCase())) {
+        found = { uid: e[0], ...u };
+      }
     });
+    if (!found) { showLoginErr(t('errWrong')); return; }
+
+    // Prihlás cez Firebase Auth s emailom
+    window.auth.signInWithEmailAndPassword(found.email, pass)
+      .catch(function() { showLoginErr(t('errWrong')); });
+  }).catch(function() { showLoginErr(t('errWrong')); });
 }
 
 function showLoginErr(msg) {
   var el = document.getElementById('login-err');
   el.textContent = msg; el.style.display = 'block';
   var btn = document.getElementById('login-btn');
-  btn.textContent = 'Prihlásiť sa'; btn.disabled = false;
+  var btxt = document.getElementById('login-btn-text');
+  if(btxt) btxt.textContent = t('login');
+  btn.disabled = false;
 }
 
 function doLogout() {
@@ -2226,7 +2726,7 @@ function onLoginSuccess() {
 function onLogout() {
   _currentUser = null; _currentProject = null;
   document.getElementById('login-screen').style.display = 'flex';
-  document.getElementById('login-email').value = '';
+  document.getElementById('login-name').value = '';
   document.getElementById('login-pass').value = '';
   document.getElementById('login-err').style.display = 'none';
   document.getElementById('login-btn').textContent = 'Prihlásiť sa';
@@ -2360,10 +2860,10 @@ function closeProjectSwitch() {
 
 function selectProject(proj) {
   _currentProject = proj;
+  window._projectIsos = undefined; // reset — načíta sa pri prvom otvorení výdajky
   closeProjectSwitch();
   document.getElementById('project-badge').style.display = 'flex';
   document.getElementById('project-badge-name').textContent = proj.name;
-  // Aktualizuj heartbeat
   if (window._fbReady && _currentUser) {
     window.db.ref('online/' + _currentUser.uid + '/project').set(proj.id);
   }
@@ -2381,16 +2881,91 @@ function openAdminPanel() {
 }
 
 function switchAdminTab(tab) {
-  document.getElementById('tab-projects').className = 'admin-tab' + (tab==='projects'?' active':'');
-  document.getElementById('tab-users').className    = 'admin-tab' + (tab==='users'?' active':'');
-  document.getElementById('tab-projects').style.cssText = tab==='projects'
-    ? 'padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:#4f7cff;border-bottom:2px solid #4f7cff'
-    : 'padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;color:#666;border-bottom:2px solid transparent';
-  document.getElementById('tab-users').style.cssText = tab==='users'
-    ? 'padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:#4f7cff;border-bottom:2px solid #4f7cff'
-    : 'padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;color:#666;border-bottom:2px solid transparent';
-  if (tab === 'projects') renderAdminProjects();
-  else renderAdminUsers();
+  ['projects','users','isos'].forEach(function(t) {
+    var el = document.getElementById('tab-'+t);
+    if (!el) return;
+    el.style.cssText = 'padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;border-bottom:2px solid ' +
+      (t===tab ? '#4f7cff;color:#4f7cff;font-weight:600' : 'transparent;color:#666');
+  });
+  if (tab==='projects') renderAdminProjects();
+  else if (tab==='users') renderAdminUsers();
+  else renderAdminIsos();
+}
+
+function renderAdminIsos() {
+  var body = document.getElementById('admin-body');
+  if (!_currentProject) { body.innerHTML='<div style="padding:20px;color:#aaa">Najprv vyberte projekt.</div>'; return; }
+  body.innerHTML = '<div style="color:#aaa;font-size:12px;padding:10px">Načítavam...</div>';
+
+  window.db.ref('projects/' + _currentProject.id + '/isometries').once('value', function(snap) {
+    var isos = snap.val() || {};
+    var list = Object.values(isos).sort();
+    var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">' +
+      '<span style="font-weight:700;font-size:14px">Izometrie pre projekt: <span style="color:#4f7cff">' + _currentProject.name + '</span></span>' +
+      '<div style="display:flex;gap:8px;align-items:center">' +
+      '<span style="font-size:12px;color:#888">' + list.length + ' izometrií</span>' +
+      '<div style="position:relative">' +
+      '<button class="btn" style="background:#4f7cff;color:#fff;padding:7px 14px;font-size:13px">📄 Nahrať PDF izometrie</button>' +
+      '<input type="file" accept=".pdf" multiple onchange="importIsoFromPdf(event)" style="position:absolute;inset:0;opacity:0;cursor:pointer">' +
+      '</div>' +
+      '<button onclick="clearAllIsos()" style="padding:7px 14px;border:1px solid #e74c3c;color:#e74c3c;background:none;border-radius:5px;cursor:pointer;font-size:12px">🗑 Vymazať všetky</button>' +
+      '</div></div>';
+
+    if (!list.length) {
+      html += '<div style="text-align:center;padding:30px;color:#aaa;font-size:13px;border:2px dashed #e4e8ef;border-radius:8px">Žiadne izometrie. Nahrajte PDF súbory — názov súboru = názov izometrie.</div>';
+    } else {
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:6px;max-height:400px;overflow-y:auto;padding:4px">';
+      list.forEach(function(iso) {
+        html += '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #e4e8ef;border-radius:6px;font-family:monospace;font-size:11px;background:#f7f8fa">' +
+          '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + iso + '</span>' +
+          '<button onclick="deleteIso(\'' + iso.replace(/'/g,"\\'") + '\')" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:14px;padding:0 2px;flex-shrink:0" title="Vymazať">✕</button>' +
+          '</div>';
+      });
+      html += '</div>';
+    }
+    body.innerHTML = html;
+  });
+}
+
+function importIsoFromPdf(e) {
+  var files = [...e.target.files];
+  if (!files.length || !_currentProject) return;
+  var base = 'projects/' + _currentProject.id + '/isometries';
+
+  window.db.ref(base).once('value', function(snap) {
+    var existing = snap.val() || {};
+    var obj = Object.assign({}, existing);
+    var added = 0;
+
+    files.forEach(function(f) {
+      // Vezmi iba názov bez prípony .pdf
+      var name = f.name.replace(/\.pdf$/i, '').trim();
+      if (!name) return;
+      // Kľúč = name bez špeciálnych znakov (Firebase key)
+      var key = name.replace(/[.#$[\]/]/g, '_');
+      obj[key] = name;
+      added++;
+    });
+
+    window.db.ref(base).set(obj, function() {
+      renderAdminIsos();
+      setStatus('✓ Pridaných ' + added + ' izometrií do projektu ' + _currentProject.name, 'ok');
+    });
+  });
+  e.target.value = '';
+}
+
+function deleteIso(name) {
+  if (!_currentProject) return;
+  var base = 'projects/' + _currentProject.id + '/isometries';
+  var key = name.replace(/[.#$[\]/]/g, '_');
+  window.db.ref(base + '/' + key).remove(function() { renderAdminIsos(); });
+}
+
+function clearAllIsos() {
+  if (!_currentProject) return;
+  if (!confirm('Vymazať všetky izometrie projektu ' + _currentProject.name + '?')) return;
+  window.db.ref('projects/' + _currentProject.id + '/isometries').remove(function() { renderAdminIsos(); });
 }
 
 function renderAdminProjects() {
@@ -2454,11 +3029,44 @@ function renderAdminUsers() {
     var projs = snaps[1].val() || {};
     var projList = Object.entries(projs).map(function(e){ return {id:e[0],name:e[1].name}; });
 
-    var html = '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
-      '<thead><tr style="background:#f0f2f5"><th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#666">Meno</th>' +
-      '<th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#666">Email</th>' +
-      '<th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#666">Rola</th>' +
-      '<th style="padding:8px 10px;font-size:11px;text-transform:uppercase;color:#666">Projekty</th></tr></thead><tbody>';
+    var html =
+      // Hlavička + tlačidlá
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">' +
+        '<span style="font-weight:700;font-size:14px">Používatelia (' + Object.keys(users).length + ')</span>' +
+        '<div style="display:flex;gap:8px">' +
+          '<a href="https://console.firebase.google.com/project/warehouse-montex/authentication/users" target="_blank" ' +
+            'style="padding:6px 12px;border:1px solid #4f7cff;color:#4f7cff;border-radius:5px;font-size:12px;text-decoration:none;display:flex;align-items:center;gap:4px">' +
+            '🔗 Firebase Auth konzola</a>' +
+          '<button onclick="showNewUserForm()" style="padding:6px 14px;background:#4f7cff;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px">+ Nový používateľ</button>' +
+        '</div>' +
+      '</div>' +
+
+      // Formulár nového používateľa (skrytý)
+      '<div id="new-user-form" style="display:none;background:#f7f8fa;border-radius:8px;padding:14px;margin-bottom:16px;border:1px solid #e4e8ef">' +
+        '<div style="font-weight:600;font-size:13px;margin-bottom:10px">Nový používateľ</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+          '<input id="nu-name" placeholder="Meno a priezvisko" style="flex:1;min-width:160px;padding:8px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">' +
+          '<input id="nu-email" placeholder="Email (napr. jan@firma.sk)" type="email" style="flex:1;min-width:180px;padding:8px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">' +
+          '<input id="nu-pass" placeholder="Heslo (min. 6 znakov)" type="password" style="flex:1;min-width:150px;padding:8px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">' +
+          '<select id="nu-role" style="padding:8px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">' +
+            '<option value="user">Používateľ</option>' +
+            '<option value="admin">Admin</option>' +
+          '</select>' +
+          '<button onclick="createNewUser()" style="padding:8px 16px;background:#27ae60;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;font-weight:700">Vytvoriť</button>' +
+          '<button onclick="document.getElementById(\'new-user-form\').style.display=\'none\'" style="padding:8px 12px;background:none;border:1px solid #ccc;border-radius:5px;cursor:pointer;font-size:13px">Zrušiť</button>' +
+        '</div>' +
+        '<div id="nu-err" style="display:none;margin-top:8px;padding:8px 12px;background:rgba(231,76,60,0.1);border-radius:5px;color:#e74c3c;font-size:12px"></div>' +
+      '</div>' +
+
+      // Tabuľka používateľov
+      '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+      '<thead><tr style="background:#f0f2f5">' +
+        '<th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#666">Meno</th>' +
+        '<th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#666">Email</th>' +
+        '<th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#666">Rola</th>' +
+        '<th style="padding:8px 10px;font-size:11px;text-transform:uppercase;color:#666">Projekty</th>' +
+        '<th style="padding:8px 10px;border-bottom:none"></th>' +
+      '</tr></thead><tbody>';
 
     Object.entries(users).forEach(function(entry) {
       var uid = entry[0]; var u = entry[1];
@@ -2469,14 +3077,68 @@ function renderAdminUsers() {
           p.name + '</label>';
       }).join('');
       html += '<tr style="border-bottom:1px solid #eee">' +
-        '<td style="padding:10px">' + (u.name||'—') + '</td>' +
+        '<td style="padding:10px;font-weight:600">' + (u.name||'—') + '</td>' +
         '<td style="padding:10px;font-size:12px;color:#666">' + (u.email||'—') + '</td>' +
         '<td style="padding:10px"><span style="font-size:11px;padding:2px 8px;border-radius:3px;background:' + (u.role==='admin'?'#dbeafe':'#f0f2f5') + ';color:' + (u.role==='admin'?'#1d4ed8':'#666') + '">' + (u.role||'user') + '</span></td>' +
         '<td style="padding:10px"><div style="display:flex;flex-direction:column;gap:4px">' + projCheckboxes + '</div></td>' +
+        '<td style="padding:10px;text-align:right"><button onclick="deleteUser(\''+uid+'\',\''+( u.name||'').replace(/'/g,'')+'\' )" style="background:none;border:1px solid #e74c3c;color:#e74c3c;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px">🗑</button></td>' +
         '</tr>';
     });
     html += '</tbody></table>';
     body.innerHTML = html;
+  });
+}
+
+function showNewUserForm() {
+  var f = document.getElementById('new-user-form');
+  if (f) { f.style.display = f.style.display==='none'?'block':'none'; }
+}
+
+function createNewUser() {
+  var name  = (document.getElementById('nu-name').value||'').trim();
+  var email = (document.getElementById('nu-email').value||'').trim().toLowerCase();
+  var pass  = (document.getElementById('nu-pass').value||'').trim();
+  var role  = document.getElementById('nu-role').value;
+  var err   = document.getElementById('nu-err');
+  err.style.display = 'none';
+
+  if (!name || !email || !pass) { err.textContent='Vyplňte všetky polia.'; err.style.display='block'; return; }
+  if (pass.length < 6) { err.textContent='Heslo musí mať aspoň 6 znakov.'; err.style.display='block'; return; }
+
+  // Vytvor cez Firebase Admin REST API (cez signUp)
+  var apiKey = 'AIzaSyD7lqAVEY3-UZAWu-q2o_6YkOkTyyV4tOA';
+  fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + apiKey, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ email: email, password: pass, returnSecureToken: true })
+  }).then(function(r){ return r.json(); }).then(function(data) {
+    if (data.error) {
+      var msg = data.error.message;
+      if (msg === 'EMAIL_EXISTS') msg = 'Tento email už existuje.';
+      err.textContent = msg; err.style.display = 'block';
+      return;
+    }
+    // Ulož profil do DB
+    return window.db.ref('users/' + data.localId).set({
+      name: name, email: email, role: role, projects: [], created: Date.now()
+    });
+  }).then(function() {
+    document.getElementById('new-user-form').style.display = 'none';
+    document.getElementById('nu-name').value = '';
+    document.getElementById('nu-email').value = '';
+    document.getElementById('nu-pass').value = '';
+    renderAdminUsers();
+    setStatus('✓ Používateľ ' + name + ' vytvorený.', 'ok');
+  }).catch(function(e) {
+    err.textContent = e.message; err.style.display = 'block';
+  });
+}
+
+function deleteUser(uid, name) {
+  if (!confirm('Vymazať používateľa ' + name + ' z databázy?\n(Auth účet zostane — vymažte ho manuálne vo Firebase konzole)')) return;
+  window.db.ref('users/' + uid).remove().then(function() {
+    renderAdminUsers();
+    setStatus('Používateľ ' + name + ' vymazaný z DB.', 'ok');
   });
 }
 
@@ -2520,6 +3182,17 @@ function initFirebase() {
     var fbVyd = snap.val() ? Object.values(snap.val()) : [];
     var localVyd = JSON.parse(localStorage.getItem('vydajky_' + base) || '[]');
     vydajkyList = fbVyd.length > 0 ? fbVyd : localVyd;
+  });
+
+  // MTO dáta z Firebase
+  window._fbOn(window._fbRef(base + '/mto'), function(snap) {
+    var fbMTO = snap.val();
+    if (fbMTO && fbMTO.materials && fbMTO.materials.length > 0) {
+      window.mtoData = fbMTO;
+      window.mtoData.loaded = true;
+      updateMTOBadge();
+      window._projectIsos = null; // reset cache
+    }
   });
 }
 
