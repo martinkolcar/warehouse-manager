@@ -1160,6 +1160,7 @@ function classifyWeldType(popis) {
   if (p.includes('RÚRA') || p.includes('RURA')) return 'PIPE';
   if (p.includes('OBLÚK') || p.includes('OBLUK') || p.includes('KOLENO')) return 'ELBOW';
   if (p.includes('T-KUS') || p.includes('TKUS')) return 'TEE';
+  if (p.includes('ODBOČKA')) return 'BRANCH';
   if (p.includes('REDUKCI')) return 'REDUCER';
   if (p.includes('PRÍRUBA') || p.includes('PRIRUBA') || p.includes('ZASLEPOVACIA')) return 'FLANGE';
   if (p.includes('ZÁSLEPKA') || p.includes('ZASLEPKA')) return 'CAP';
@@ -1168,11 +1169,22 @@ function classifyWeldType(popis) {
 }
 
 function extractDimsFromPopis(popis) {
-  var m = popis.match(/(\d+\.?\d*)x(\d+\.?\d*)mm/);
+  var m = popis.match(/(\d+\.?\d*)x(\d+\.?\d*)mm/i);
   if (m) return { od: m[1], wt: m[2], size: m[1]+'x'+m[2] };
   var m2 = popis.match(/DN\s*(\d+)/i);
   if (m2) return { od: m2[1], wt: '', size: m2[1] };
   return { od: '', wt: '', size: '' };
+}
+
+// Pre redukovací DN formát "350X25" → vráti menší = 25
+function getWeldableDN(dn) {
+  var parts = String(dn).split(/[xX]/);
+  if (parts.length === 2) {
+    var a = parseInt(parts[0]);
+    var b = parseInt(parts[1]);
+    return String(Math.min(a, b));
+  }
+  return String(dn);
 }
 
 function extractMaterialFromPopis(popis) {
@@ -1416,12 +1428,12 @@ function renderVydMatList() {
     mtoItems.forEach(function(m, idx) {
       var dims = extractDimsFromPopis(m.popis);
       var mat  = extractMaterialFromPopis(m.popis);
-      var typeColors = {PIPE:'#dbeafe',ELBOW:'#dcfce7',TEE:'#fef9c3',REDUCER:'#fce7f3',FLANGE:'#ede9fe',CAP:'#ffedd5',VALVE:'#fee2e2'};
+      var typeColors = {PIPE:'#dbeafe',ELBOW:'#dcfce7',TEE:'#fef9c3',REDUCER:'#fce7f3',FLANGE:'#ede9fe',CAP:'#ffedd5',VALVE:'#fee2e2',BRANCH:'#ccfbf1'};
       var bg = typeColors[m.weldType]||'#f9fafb';
       html += '<div onclick="addMTOToVydajka(' + idx + ')" style="padding:8px;border-bottom:1px solid #e5e7eb;cursor:pointer;display:flex;align-items:center;gap:8px;background:white;border-radius:4px;margin-bottom:4px">';
       html += '<span style="background:'+bg+';padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700;min-width:55px;text-align:center">'+m.weldType+'</span>';
       html += '<div style="flex:1;font-size:12px">';
-      html += '<div><strong>DN'+m.dn+'</strong>';
+      html += '<div><strong>DN'+getWeldableDN(m.dn)+'</strong>';
       if (dims.size) html += ' &nbsp;<span style="color:#666">'+dims.size+'mm</span>';
       if (mat) html += ' &nbsp;<span style="color:#059669">'+mat+'</span>';
       html += '</div>';
