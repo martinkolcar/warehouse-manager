@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WarehousePro</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-database-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-auth-compat.min.js"></script>
@@ -274,32 +275,6 @@ table.main td.center { text-align: center; }
     </div>
   </div>
   <div style="flex:1"></div>
-  <!-- Jazyky -->
-  <div style="display:flex;gap:2px;background:rgba(255,255,255,0.12);border-radius:7px;padding:3px;margin-right:10px;border:1px solid rgba(255,255,255,0.15)">
-    <button onclick="setLang('sk')" id="hLangBtn_sk" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:4px;opacity:1" title="Slovenčina">🇸🇰</button>
-    <button onclick="setLang('en')" id="hLangBtn_en" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:4px;opacity:0.4" title="English">🇬🇧</button>
-    <button onclick="setLang('de')" id="hLangBtn_de" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:4px;opacity:0.4" title="Deutsch">🇩🇪</button>
-    <button onclick="setLang('uk')" id="hLangBtn_uk" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:4px;opacity:0.4" title="Українська">🇺🇦</button>
-  </div>
-  <!-- Online používatelia -->
-  <div id="online-bar" style="display:none;align-items:center;gap:6px;margin-right:16px"></div>
-  <button id="btn-nova-vydajka" class="btn" style="background:#4f7cff;color:#fff;font-size:13px;padding:9px 20px;border-radius:6px" onclick="openVydajkaWindow()">📋 Nová výdajka</button>
-  <span id="sync-status" style="font-size:11px;margin-left:10px;color:#f59e0b">⏳ Pripájam...</span>
-  <!-- User menu -->
-  <div id="user-menu-wrap" style="display:none;margin-left:14px;position:relative">
-    <button id="user-menu-btn" onclick="toggleUserMenu()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px">
-      <span id="user-avatar" style="width:24px;height:24px;background:#4f7cff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700"></span>
-      <span id="user-name-badge"></span>
-      <span style="font-size:10px">▾</span>
-    </button>
-    <div id="user-dropdown" style="display:none;position:absolute;right:0;top:calc(100% + 6px);background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.15);min-width:180px;z-index:999;overflow:hidden">
-      <div id="user-dropdown-name" style="padding:10px 14px;font-size:12px;color:#666;border-bottom:1px solid #eee"></div>
-      <button id="admin-btn" onclick="openAdminPanel();toggleUserMenu()" style="display:none;width:100%;text-align:left;padding:10px 14px;border:none;background:none;cursor:pointer;font-size:13px;color:#4f7cff">⚙️ Admin panel</button>
-      <button onclick="openProjectSwitch();toggleUserMenu()" style="width:100%;text-align:left;padding:10px 14px;border:none;background:none;cursor:pointer;font-size:13px;color:#1a1a2e">🔄 Prepnúť projekt</button>
-      <button onclick="doLogout()" style="width:100%;text-align:left;padding:10px 14px;border:none;background:none;cursor:pointer;font-size:13px;color:#e74c3c;border-top:1px solid #eee">↩ Odhlásiť sa</button>
-    </div>
-  </div>
-</header>
   <!-- Jazyky -->
   <div style="display:flex;gap:2px;background:rgba(255,255,255,0.12);border-radius:7px;padding:3px;margin-right:10px;border:1px solid rgba(255,255,255,0.15)">
     <button onclick="setLang('sk')" id="hLangBtn_sk" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:4px;opacity:1" title="Slovenčina">🇸🇰</button>
@@ -2642,10 +2617,10 @@ window.addEventListener('DOMContentLoaded', function() {
   try {
     firebase.initializeApp({
       apiKey: "AIzaSyD7lqAVEY3-UZAWu-q2o_6YkOkTyyV4tOA",
-      authDomain: "warehouse-dany.firebaseapp.com",
-      databaseURL: "https://warehouse-dany-default-rtdb.europe-west1.firebasedatabase.app",
-      projectId: "warehouse-dany",
-      storageBucket: "warehouse-dany.firebasestorage.app",
+      authDomain: "warehouse-montex.firebaseapp.com",
+      databaseURL: "https://warehouse-montex-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "warehouse-montex",
+      storageBucket: "warehouse-montex.firebasestorage.app",
       messagingSenderId: "1071159413037",
       appId: "1:1071159413037:web:93ffc2eb346b781c5b2ba4"
     });
@@ -2751,7 +2726,7 @@ function onLoginSuccess() {
 function onLogout() {
   _currentUser = null; _currentProject = null;
   document.getElementById('login-screen').style.display = 'flex';
-  document.getElementById('login-email').value = '';
+  document.getElementById('login-name').value = '';
   document.getElementById('login-pass').value = '';
   document.getElementById('login-err').style.display = 'none';
   document.getElementById('login-btn').textContent = 'Prihlásiť sa';
@@ -3059,7 +3034,7 @@ function renderAdminUsers() {
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">' +
         '<span style="font-weight:700;font-size:14px">Používatelia (' + Object.keys(users).length + ')</span>' +
         '<div style="display:flex;gap:8px">' +
-          '<a href="https://console.firebase.google.com/project/warehouse-dany/authentication/users" target="_blank" ' +
+          '<a href="https://console.firebase.google.com/project/warehouse-montex/authentication/users" target="_blank" ' +
             'style="padding:6px 12px;border:1px solid #4f7cff;color:#4f7cff;border-radius:5px;font-size:12px;text-decoration:none;display:flex;align-items:center;gap:4px">' +
             '🔗 Firebase Auth konzola</a>' +
           '<button onclick="showNewUserForm()" style="padding:6px 14px;background:#4f7cff;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px">+ Nový používateľ</button>' +
