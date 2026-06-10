@@ -1071,8 +1071,8 @@ window.mtoData = {
 // Typy ktoré sa zváraju (pre vydajku)
 const WELD_TYPES = ['PIPE','ELBOW','TEE','REDUCER','FLANGE','CAP','VALVE'];
 
-// Kategórie ktoré nechceme vo vydajke
-const SKIP_CATEGORIES = ['TESNENIA','SKRUTKY','ULOŽENIA A UZEMNENIE','ULOŽENIA a UZEMNENIE'];
+// Všetky kategórie sa ukladajú, filter nie je potrebný
+const SKIP_CATEGORIES = [];
 
 function uploadMTOExcel() {
   var input = document.createElement('input');
@@ -1164,6 +1164,8 @@ function classifyWeldType(popis) {
   if (p.includes('REDUKCI')) return 'REDUCER';
   if (p.includes('PRÍRUBA') || p.includes('PRIRUBA') || p.includes('ZASLEPOVACIA')) return 'FLANGE';
   if (p.includes('ZÁSLEPKA') || p.includes('ZASLEPKA')) return 'CAP';
+  // Ventil/klapka s prírubami = prírubový spoj, nie zvar
+  if ((p.includes('VENTIL') || p.includes('KLAPKA')) && (p.includes('PRÍRUB') || p.includes('PRIRUB') || p.includes('PN'))) return null;
   if (p.includes('KLAPKA') || p.includes('VENTIL')) return 'VALVE';
   return null;
 }
@@ -1188,7 +1190,7 @@ function getWeldableDN(dn) {
 }
 
 function extractMaterialFromPopis(popis) {
-  var m = popis.match(/\b(P\d{3}[A-Z]{0,2}|25CrMo\d|13CrMo|316L?|304L?|1\.4\d{3})\b/);
+  var m = popis.match(/\b(P\d{3}[A-Z]{0,2}|S\d{3}[A-Z0-9]*|25CrMo\d|13CrMo|316L?|304L?|1\.4\d{3}|GP\d{3})\b/);
   return m ? m[1] : '';
 }
 
@@ -1418,8 +1420,8 @@ function renderVydMatList() {
   const el      = document.getElementById('vyd-mat-list');
   if (!vydIso) { el.innerHTML = ''; return; }
 
-  // ── MTO sekcia pre izometriu ──
-  const mtoItems = getMTOForIso(vydIso).filter(m => m.weldType);
+  // ── MTO sekcia pre izometriu ── (všetky položky)
+  const mtoItems = getMTOForIso(vydIso);
   let html = '';
 
   if (mtoItems.length > 0) {
@@ -1428,22 +1430,23 @@ function renderVydMatList() {
     mtoItems.forEach(function(m, idx) {
       var dims = extractDimsFromPopis(m.popis);
       var mat  = extractMaterialFromPopis(m.popis);
+      var wt = m.weldType;
       var typeColors = {PIPE:'#dbeafe',ELBOW:'#dcfce7',TEE:'#fef9c3',REDUCER:'#fce7f3',FLANGE:'#ede9fe',CAP:'#ffedd5',VALVE:'#fee2e2',BRANCH:'#ccfbf1'};
-      var bg = typeColors[m.weldType]||'#f9fafb';
+      var bg = wt ? (typeColors[wt]||'#f9fafb') : '#f1f5f9';
+      var label = wt || (m.kategoria||'').toUpperCase().substring(0,8) || 'INÉ';
       html += '<div onclick="addMTOToVydajka(' + idx + ')" style="padding:8px;border-bottom:1px solid #e5e7eb;cursor:pointer;display:flex;align-items:center;gap:8px;background:white;border-radius:4px;margin-bottom:4px">';
-      html += '<span style="background:'+bg+';padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700;min-width:55px;text-align:center">'+m.weldType+'</span>';
+      html += '<span style="background:'+bg+';padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700;min-width:60px;text-align:center">'+label+'</span>';
       html += '<div style="flex:1;font-size:12px">';
       html += '<div><strong>DN'+getWeldableDN(m.dn)+'</strong>';
       if (dims.size) html += ' &nbsp;<span style="color:#666">'+dims.size+'mm</span>';
       if (mat) html += ' &nbsp;<span style="color:#059669">'+mat+'</span>';
       html += '</div>';
-      html += '<div style="color:#9ca3af;font-size:10px">POZ.'+m.poz+' &nbsp;·&nbsp; '+m.mn+'</div>';
+      html += '<div style="color:#9ca3af;font-size:10px">POZ.'+m.poz+' &nbsp;·&nbsp; '+m.mn+' &nbsp;·&nbsp; <span style="color:#555">'+m.popis.substring(0,50)+'</span></div>';
       html += '</div>';
-      html += '<span style="font-size:10px;color:#10b981;font-weight:600">+ Pridať</span>';
+      html += wt ? '<span style="font-size:10px;color:#10b981;font-weight:600">🔧 vydať</span>' : '<span style="font-size:10px;color:#94a3b8">vydať</span>';
       html += '</div>';
     });
     html += '</div>';
-    // Uložíme MTO items pre addMTOToVydajka
     window._currentMTOItems = mtoItems;
   }
 
