@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Warehouse Manager</title>
+<title>WarehousePro</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-database-compat.min.js"></script>
@@ -260,15 +260,46 @@ table.main td.center { text-align: center; }
 <header>
   <div style="display:flex;align-items:center;gap:14px">
     <div>
-      <h1>Warehouse <span>Manager</span></h1>
+      <h1>Warehouse<span>Pro</span></h1>
     </div>
     <!-- Projekt badge -->
     <div id="project-badge" style="display:none;background:rgba(79,124,255,0.15);border:1px solid #4f7cff;border-radius:6px;padding:4px 12px;cursor:pointer" onclick="openProjectSwitch()" title="Prepnúť projekt">
       <span style="font-size:10px;color:#9a9bb0;display:block;line-height:1">PROJEKT</span>
       <span id="project-badge-name" style="font-size:13px;font-weight:700;color:#e0e8ff"></span>
     </div>
+    <!-- MTO badge -->
+    <div id="mto-badge" style="background:rgba(16,185,129,0.15);border:1px solid #10b981;border-radius:6px;padding:4px 12px;cursor:pointer" onclick="uploadMTOExcel()" title="Načítať MTO Excel">
+      <span style="font-size:10px;color:#9a9bb0;display:block;line-height:1">MTO</span>
+      <span id="mto-badge-count" style="font-size:13px;font-weight:700;color:#10b981">📊 Načítať</span>
+    </div>
   </div>
   <div style="flex:1"></div>
+  <!-- Jazyky -->
+  <div style="display:flex;gap:2px;background:rgba(255,255,255,0.12);border-radius:7px;padding:3px;margin-right:10px;border:1px solid rgba(255,255,255,0.15)">
+    <button onclick="setLang('sk')" id="hLangBtn_sk" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:4px;opacity:1" title="Slovenčina">🇸🇰</button>
+    <button onclick="setLang('en')" id="hLangBtn_en" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:4px;opacity:0.4" title="English">🇬🇧</button>
+    <button onclick="setLang('de')" id="hLangBtn_de" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:4px;opacity:0.4" title="Deutsch">🇩🇪</button>
+    <button onclick="setLang('uk')" id="hLangBtn_uk" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:4px;opacity:0.4" title="Українська">🇺🇦</button>
+  </div>
+  <!-- Online používatelia -->
+  <div id="online-bar" style="display:none;align-items:center;gap:6px;margin-right:16px"></div>
+  <button id="btn-nova-vydajka" class="btn" style="background:#4f7cff;color:#fff;font-size:13px;padding:9px 20px;border-radius:6px" onclick="openVydajkaWindow()">📋 Nová výdajka</button>
+  <span id="sync-status" style="font-size:11px;margin-left:10px;color:#f59e0b">⏳ Pripájam...</span>
+  <!-- User menu -->
+  <div id="user-menu-wrap" style="display:none;margin-left:14px;position:relative">
+    <button id="user-menu-btn" onclick="toggleUserMenu()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px">
+      <span id="user-avatar" style="width:24px;height:24px;background:#4f7cff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700"></span>
+      <span id="user-name-badge"></span>
+      <span style="font-size:10px">▾</span>
+    </button>
+    <div id="user-dropdown" style="display:none;position:absolute;right:0;top:calc(100% + 6px);background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.15);min-width:180px;z-index:999;overflow:hidden">
+      <div id="user-dropdown-name" style="padding:10px 14px;font-size:12px;color:#666;border-bottom:1px solid #eee"></div>
+      <button id="admin-btn" onclick="openAdminPanel();toggleUserMenu()" style="display:none;width:100%;text-align:left;padding:10px 14px;border:none;background:none;cursor:pointer;font-size:13px;color:#4f7cff">⚙️ Admin panel</button>
+      <button onclick="openProjectSwitch();toggleUserMenu()" style="width:100%;text-align:left;padding:10px 14px;border:none;background:none;cursor:pointer;font-size:13px;color:#1a1a2e">🔄 Prepnúť projekt</button>
+      <button onclick="doLogout()" style="width:100%;text-align:left;padding:10px 14px;border:none;background:none;cursor:pointer;font-size:13px;color:#e74c3c;border-top:1px solid #eee">↩ Odhlásiť sa</button>
+    </div>
+  </div>
+</header>
   <!-- Jazyky -->
   <div style="display:flex;gap:2px;background:rgba(255,255,255,0.12);border-radius:7px;padding:3px;margin-right:10px;border:1px solid rgba(255,255,255,0.15)">
     <button onclick="setLang('sk')" id="hLangBtn_sk" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 5px;border-radius:4px;opacity:1" title="Slovenčina">🇸🇰</button>
@@ -1054,6 +1085,150 @@ const ISOS = {
   LHT: ["GÅL-716-20159-1-300-25H2A","GÅL-716-20160-1-300-25H2A","GÅL-716-20161-1-400-25H2A","GKD-716-20186-2-250-25H2A","KL-716-20185-1-50-40H1A","LTJ-716-20150-2-300-40H3A","LTJ-716-20151-1-300-40H3A","LTJ-716-20174-1-100-40H1A","VVM-716-20171-1-100-10H2A"]
 };
 
+// ─── MTO DATA ─────────────────────────────────
+// Načítané z MTO Excel (náš DXF parser)
+window.mtoData = {
+  materials: [],      // všetky položky
+  isoList: [],        // unikátne izometrie (SÚBOR stĺpec)
+  loaded: false
+};
+
+// Typy ktoré sa zváraju (pre vydajku)
+const WELD_TYPES = ['PIPE','ELBOW','TEE','REDUCER','FLANGE','CAP','VALVE'];
+
+// Kategórie ktoré nechceme vo vydajke
+const SKIP_CATEGORIES = ['TESNENIA','SKRUTKY','ULOŽENIA A UZEMNENIE','ULOŽENIA a UZEMNENIE'];
+
+function uploadMTOExcel() {
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.xlsx,.xls';
+  input.onchange = function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      try {
+        var data = new Uint8Array(ev.target.result);
+        var workbook = XLSX.read(data, {type:'array'});
+        // Hľadaj sheet MTO
+        var sheetName = workbook.SheetNames[0];
+        if (workbook.SheetNames.indexOf('MTO') >= 0) sheetName = 'MTO';
+        var sheet = workbook.Sheets[sheetName];
+        var json = XLSX.utils.sheet_to_json(sheet);
+
+        window.mtoData.materials = [];
+        var isoSet = {};
+
+        json.forEach(function(row) {
+          var subor     = (row['SÚBOR']||row['SUBOR']||row['FILE']||'').trim();
+          var izometria = (row['IZOMETRIA']||row['ISOMETRIC']||'').trim();
+          var kategoria = (row['KATEGÓRIA']||row['KATEGORIA']||'').trim();
+          var poz       = (row['POZ.']||row['POZ']||'').toString().trim();
+          var dn        = (row['DN']||'').toString().trim();
+          var popis     = (row['POPIS']||row['PART DESCRIPTION']||'').trim();
+          var mn        = (row['MN. [m/ks]']||row['MN']||row['QTY']||'').toString().trim();
+          var hmotn     = (row['HMOTN. [kg]']||row['HMOTN']||'').toString().trim();
+
+          if (!popis) return;
+
+          // Preskočiť tesnenia, skrutky, podpery
+          var skip = false;
+          SKIP_CATEGORIES.forEach(function(cat) {
+            if (kategoria.toUpperCase().includes(cat.toUpperCase())) skip = true;
+          });
+          if (skip) return;
+
+          // Klasifikuj typ
+          var weldType = classifyWeldType(popis);
+
+          window.mtoData.materials.push({
+            subor, izometria, kategoria, poz, dn, popis, mn, hmotn,
+            weldType
+          });
+
+          if (subor) isoSet[subor] = true;
+        });
+
+        window.mtoData.isoList = Object.keys(isoSet).sort();
+        window.mtoData.loaded = true;
+
+        // Ulož na Firebase
+        var base = window._currentProject ? 'projects/' + window._currentProject.id : 'legacy';
+        if (window._fbReady) {
+          window._fbSet(window._fbRef(base + '/mto'), window.mtoData).then(function() {
+            console.log('✅ MTO uložené na Firebase');
+          }).catch(function(e) {
+            console.warn('⚠️ Firebase MTO zápis zlyhal:', e);
+            localStorage.setItem('warehousepro_mto_' + base, JSON.stringify(window.mtoData));
+          });
+        } else {
+          // Fallback na localStorage
+          localStorage.setItem('warehousepro_mto_' + base, JSON.stringify(window.mtoData));
+        }
+
+        updateMTOBadge();
+        window._projectIsos = null;
+
+        alert('✅ MTO načítané!\n\n📝 Položiek: ' + window.mtoData.materials.length + '\n📐 Izometrií: ' + window.mtoData.isoList.length);
+      } catch(err) {
+        alert('❌ Chyba: ' + err.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+  input.click();
+}
+
+function classifyWeldType(popis) {
+  var p = popis.toUpperCase();
+  if (p.includes('RÚRA') || p.includes('RURA')) return 'PIPE';
+  if (p.includes('OBLÚK') || p.includes('OBLUK') || p.includes('KOLENO')) return 'ELBOW';
+  if (p.includes('T-KUS') || p.includes('TKUS')) return 'TEE';
+  if (p.includes('REDUKCI')) return 'REDUCER';
+  if (p.includes('PRÍRUBA') || p.includes('PRIRUBA') || p.includes('ZASLEPOVACIA')) return 'FLANGE';
+  if (p.includes('ZÁSLEPKA') || p.includes('ZASLEPKA')) return 'CAP';
+  if (p.includes('KLAPKA') || p.includes('VENTIL')) return 'VALVE';
+  return null;
+}
+
+function extractDimsFromPopis(popis) {
+  var m = popis.match(/(\d+\.?\d*)x(\d+\.?\d*)mm/);
+  if (m) return { od: m[1], wt: m[2], size: m[1]+'x'+m[2] };
+  var m2 = popis.match(/DN\s*(\d+)/i);
+  if (m2) return { od: m2[1], wt: '', size: m2[1] };
+  return { od: '', wt: '', size: '' };
+}
+
+function extractMaterialFromPopis(popis) {
+  var m = popis.match(/\b(P\d{3}[A-Z]{0,2}|25CrMo\d|13CrMo|316L?|304L?|1\.4\d{3})\b/);
+  return m ? m[1] : '';
+}
+
+function updateMTOBadge() {
+  var badge = document.getElementById('mto-badge-count');
+  if (!badge) return;
+  if (window.mtoData.loaded && window.mtoData.isoList.length > 0) {
+    badge.textContent = '✅ ' + window.mtoData.isoList.length + ' izometrií';
+    badge.style.color = '#10b981';
+  } else {
+    badge.textContent = '📊 Načítať';
+    badge.style.color = '#f59e0b';
+  }
+}
+
+function getMTOForIso(isoName) {
+  if (!window.mtoData.loaded) return [];
+  return window.mtoData.materials.filter(function(m) {
+    var src = (m.subor||'').replace(/\.(pdf|dxf|jpg|png)$/i,'').replace(/[._]/g,'-').toLowerCase();
+    var iso = (isoName||'').replace(/\.(pdf|dxf|jpg|png)$/i,'').replace(/[._]/g,'-').toLowerCase();
+    return src === iso || src.includes(iso) || iso.includes(src);
+  });
+}
+
+// MTO dáta sa načítavajú z Firebase v initFirebase()
+window.mtoData = { materials: [], isoList: [], loaded: false };
+
 // ─── VÝDAJKA STATE ────────────────────────────
 let vydLines = [];
 let vydIso = null;
@@ -1128,58 +1303,22 @@ function closeVydajka() {
 
 // ─── ISO LIST (ľavý panel) ────────────────────
 function renderIsoList(q) {
-  var sec = document.getElementById('vyd-sec-sel').value;
   var ql = (q||'').toLowerCase().trim();
   var el = document.getElementById('vyd-iso-list');
 
-  var isoSource = window._projectIsos;
-
-  // Ak ešte nenačítané — načítaj z Firebase, fallback na statické ISOS
-  if (!isoSource) {
-    window._projectIsos = null; // loading stav
-    el.innerHTML = '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">⏳ Načítavam...</div>';
-    if (_currentProject && window._fbReady) {
-      window.db.ref('projects/' + _currentProject.id + '/isometries').once('value', function(snap) {
-        var val = snap.val() || {};
-        var fbList = Object.values(val).sort();
-        // Ak Firebase prázdny → použij statické ISOS
-        if (fbList.length) {
-          window._projectIsos = fbList;
-        } else {
-          var all = [];
-          Object.values(ISOS).forEach(function(arr){ arr.forEach(function(iso){ all.push(iso); }); });
-          window._projectIsos = all.sort();
-        }
-        renderIsoList(q);
-      });
-    } else {
-      var all = [];
-      Object.values(ISOS).forEach(function(arr){ arr.forEach(function(iso){ all.push(iso); }); });
-      window._projectIsos = all.sort();
-      renderIsoList(q);
-    }
+  // Použi MTO dáta ak sú načítané
+  var isoSource;
+  if (window.mtoData && window.mtoData.loaded && window.mtoData.isoList.length > 0) {
+    isoSource = window.mtoData.isoList;
+  } else {
+    el.innerHTML = '<div style="padding:16px;text-align:center;color:#f59e0b;font-size:12px">📊 Načítajte MTO Excel<br><button onclick="uploadMTOExcel()" style="margin-top:8px;padding:6px 12px;background:#10b981;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px">Načítať MTO</button></div>';
     return;
   }
 
-  // Filter
   var filtered = isoSource.filter(function(iso) {
-    if (sec) {
-      // Skontroluj sekciu zo statického ISOS
-      var inSec = false;
-      if (ISOS[sec] && ISOS[sec].includes(iso)) inSec = true;
-      // Pre PDF izometrie — sekcia je prefix v názve
-      if (!inSec && iso.toUpperCase().includes(sec.toUpperCase())) inSec = true;
-      if (!inSec) return false;
-    }
     if (ql && !iso.toLowerCase().includes(ql)) return false;
     return true;
   });
-
-  if (!isoSource.length || (!ql && !sec)) {
-    el.innerHTML = '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">Zadajte hľadaný text alebo vyberte sekciu</div>';
-    // Ale ak máme filter, ukáž výsledky
-    if (!ql && !sec) return;
-  }
 
   if (!filtered.length) {
     el.innerHTML = '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">Žiadne výsledky</div>';
@@ -1190,11 +1329,10 @@ function renderIsoList(q) {
     var esc = iso.replace(/'/g, "\\'");
     var active = vydIso === iso ? ' active' : '';
     var highlighted = ql ? iso.replace(new RegExp('(' + ql.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi'), '<mark style="background:#fff3b0;border-radius:2px">$1</mark>') : iso;
-    // Sekcia badge pre statické izometrie
-    var secBadge = '';
-    Object.entries(ISOS).forEach(function(e){ if(e[1].includes(iso)) secBadge = '<span class="vyd-sec-tag">' + e[0] + '</span>'; });
+    var mtoCount = getMTOForIso(iso).length;
+    var badge = mtoCount ? '<span style="background:#10b981;color:white;padding:1px 5px;border-radius:3px;font-size:10px;margin-left:4px">' + mtoCount + '</span>' : '';
     return '<div class="vyd-iso-item' + active + '" onclick="selectVydIso(\'' + esc + '\',\'\')">' +
-      '<span class="vyd-iso-name">' + highlighted + '</span>' + secBadge +
+      '<span class="vyd-iso-name">' + highlighted + badge + '</span>' +
       '</div>';
   }).join('');
 }
@@ -1293,6 +1431,36 @@ function renderVydMatList() {
   const el      = document.getElementById('vyd-mat-list');
   if (!vydIso) { el.innerHTML = ''; return; }
 
+  // ── MTO sekcia pre izometriu ──
+  const mtoItems = getMTOForIso(vydIso).filter(m => m.weldType);
+  let html = '';
+
+  if (mtoItems.length > 0) {
+    html += '<div style="background:#f0fdf4;border:1px solid #10b981;border-radius:6px;padding:10px;margin-bottom:10px">';
+    html += '<div style="font-size:11px;font-weight:700;color:#065f46;margin-bottom:6px">📋 MTO — MATERIÁLY IZOMETRIE</div>';
+    mtoItems.forEach(function(m, idx) {
+      var dims = extractDimsFromPopis(m.popis);
+      var mat  = extractMaterialFromPopis(m.popis);
+      var typeColors = {PIPE:'#dbeafe',ELBOW:'#dcfce7',TEE:'#fef9c3',REDUCER:'#fce7f3',FLANGE:'#ede9fe',CAP:'#ffedd5',VALVE:'#fee2e2'};
+      var bg = typeColors[m.weldType]||'#f9fafb';
+      html += '<div onclick="addMTOToVydajka(' + idx + ')" style="padding:8px;border-bottom:1px solid #e5e7eb;cursor:pointer;display:flex;align-items:center;gap:8px;background:white;border-radius:4px;margin-bottom:4px">';
+      html += '<span style="background:'+bg+';padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700;min-width:55px;text-align:center">'+m.weldType+'</span>';
+      html += '<div style="flex:1;font-size:12px">';
+      html += '<div><strong>DN'+m.dn+'</strong>';
+      if (dims.size) html += ' &nbsp;<span style="color:#666">'+dims.size+'mm</span>';
+      if (mat) html += ' &nbsp;<span style="color:#059669">'+mat+'</span>';
+      html += '</div>';
+      html += '<div style="color:#9ca3af;font-size:10px">POZ.'+m.poz+' &nbsp;·&nbsp; '+m.mn+'</div>';
+      html += '</div>';
+      html += '<span style="font-size:10px;color:#10b981;font-weight:600">+ Pridať</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+    // Uložíme MTO items pre addMTOToVydajka
+    window._currentMTOItems = mtoItems;
+  }
+
+  // ── Sklad sekcia ──
   const avail   = items.filter(it => parseFloat(it.zostatok) > 0);
   const filtered = avail.filter(it =>
     (!fTyp    || it.typ === fTyp) &&
@@ -1315,29 +1483,68 @@ function renderVydMatList() {
 
   document.getElementById('vf-count').textContent = `${filtered.length} položiek`;
 
-  if (!filtered.length) {
-    el.innerHTML = '<div style="text-align:center;padding:30px;color:#aaa;font-size:12px">Žiadne položky</div>';
-    return;
+  if (filtered.length > 0) {
+    html += '<div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:6px;padding-left:2px">🏭 SKLAD</div>';
+    html += filtered.map(it => {
+      const realIdx = items.indexOf(it);
+      const q = parseFloat(it.zostatok)||0;
+      const qClass = q<=0?'qty-zero':q<3?'qty-low':'qty-ok';
+      const qStr = it.jednotka==='m'?q.toFixed(2)+' m':q+' ks';
+      return `<div class="vyd-mat-row" onclick="addToVydajka(${realIdx})">
+        <div class="mat-info">
+          <div><span class="badge badge-${typClass(it.typ)}">${shortType(it.typ)}</span>
+            <span class="mat-rozmer" style="margin-left:6px">${it.rozmer}</span></div>
+          <div class="mat-typ">${it.typ}</div>
+          <div class="mat-tavba">Tavba: <strong>${it.tavba||'—'}</strong> &nbsp;|&nbsp; ${it.material||''} &nbsp;|&nbsp; <span style="color:#aaa">${it.norma||''}</span></div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <span class="mat-stock ${qClass}">${qStr}</span><br>
+          <span style="font-size:10px;color:#aaa">${it.zdroj_dl||''}</span>
+        </div>
+      </div>`;
+    }).join('');
+  } else if (!mtoItems.length) {
+    html += '<div style="text-align:center;padding:30px;color:#aaa;font-size:12px">Žiadne položky</div>';
   }
 
-  el.innerHTML = filtered.map(it => {
-    const realIdx = items.indexOf(it);
-    const q = parseFloat(it.zostatok)||0;
-    const qClass = q<=0?'qty-zero':q<3?'qty-low':'qty-ok';
-    const qStr = it.jednotka==='m'?q.toFixed(2)+' m':q+' ks';
-    return `<div class="vyd-mat-row" onclick="addToVydajka(${realIdx})">
-      <div class="mat-info">
-        <div><span class="badge badge-${typClass(it.typ)}">${shortType(it.typ)}</span>
-          <span class="mat-rozmer" style="margin-left:6px">${it.rozmer}</span></div>
-        <div class="mat-typ">${it.typ}</div>
-        <div class="mat-tavba">Tavba: <strong>${it.tavba||'—'}</strong> &nbsp;|&nbsp; ${it.material||''} &nbsp;|&nbsp; <span style="color:#aaa">${it.norma||''}</span></div>
-      </div>
-      <div style="text-align:right;flex-shrink:0">
-        <span class="mat-stock ${qClass}">${qStr}</span><br>
-        <span style="font-size:10px;color:#aaa">${it.zdroj_dl||''}</span>
-      </div>
-    </div>`;
-  }).join('');
+  el.innerHTML = html;
+}
+
+// ─── PRIDAŤ MTO POLOŽKU DO VÝDAJKY ────────────
+function addMTOToVydajka(mtoIdx) {
+  if (!vydIso) { alert('Najprv vyberte izometriu'); return; }
+  var m = (window._currentMTOItems||[])[mtoIdx];
+  if (!m) return;
+
+  var dims = extractDimsFromPopis(m.popis);
+  var mat  = extractMaterialFromPopis(m.popis);
+  var isPipe = m.weldType === 'PIPE';
+
+  vydLines.push({
+    itemIdx: null,        // nie zo skladu — z MTO
+    typ: m.weldType,
+    rozmer: dims.size || m.dn,
+    material: mat,
+    norma: '',
+    tavba: '',
+    jednotka: isPipe ? 'm' : 'ks',
+    stockMax: 0,
+    vydQty: isPipe ? 0 : 1,
+    dlzka: '',
+    spCislo: '',
+    isPipe: isPipe,
+    fromMTO: true,
+    mtoPN: m.poz,
+    mtoPopis: m.popis,
+    mtoMN: m.mn
+  });
+
+  const panel = document.getElementById('vyd-lines-panel');
+  panel.style.display = 'flex';
+  panel.style.flexDirection = 'column';
+  appendVydRow(vydLines.length - 1);
+  updateVydCount();
+  updateHasPipeCols();
 }
 
 // ─── PRIDAŤ DO VÝDAJKY ────────────────────────
@@ -1653,12 +1860,11 @@ function openVydNahladFromData(v) {
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;border-bottom:2px solid #1a1a2e;padding-bottom:8px;flex-wrap:wrap;gap:10px">' +
           '<div>' +
             '<div style="font-size:clamp(13px,2vw,18px);font-weight:700;color:#1a1a2e;letter-spacing:0.04em">FABRICATION MATERIALS ISSUE SLIP</div>' +
-            '<div style="font-size:clamp(10px,1.3vw,12px);color:#666;margin-top:2px">PMP Montex s.r.o. · Výdajka materiálu z výrobného skladu</div>' +
+            '<div style="font-size:clamp(10px,1.3vw,12px);color:#666;margin-top:2px">WarehousePro · Výdajka materiálu z výrobného skladu</div>' +
           '</div>' +
           '<div style="text-align:right;font-size:clamp(10px,1.3vw,12px);color:#444;line-height:1.8">' +
-            '<strong>Číslo výdajky:</strong> ' + (v.cislo||'—') + '<br>' +
+            '<strong>Projekt:</strong> ' + (window._currentProject ? window._currentProject.name || window._currentProject.id : '—') + '<br>' +
             '<strong>Izometria:</strong> ' + (v.iso||'—') + '<br>' +
-            '<strong>Sekcia:</strong> ' + (v.sec||'—') + '<br>' +
             '<strong>Dátum:</strong> ' + v.datum +
           '</div>' +
         '</div>' +
@@ -1688,7 +1894,7 @@ function openVydNahladFromData(v) {
           '<div style="flex:1;min-width:140px"><div style="border-bottom:1px solid #999;height:30px;margin-bottom:4px"></div>Vydal / Issued by</div>' +
           '<div style="flex:1;min-width:140px"><div style="border-bottom:1px solid #999;height:30px;margin-bottom:4px"></div>Prevzal / Received by</div>' +
           '<div style="flex:1;min-width:140px"><div style="border-bottom:1px solid #999;height:30px;margin-bottom:4px"></div>Dátum prevzatia / Date received</div>' +
-          '<div style="flex:2;text-align:right;color:#ccc;font-size:10px;align-self:flex-end;min-width:120px">Warehouse Manager · ' + new Date().toLocaleString('sk-SK') + '</div>' +
+          '<div style="flex:2;text-align:right;color:#ccc;font-size:10px;align-self:flex-end;min-width:120px">WarehousePro · ' + new Date().toLocaleString('sk-SK') + '</div>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -1761,12 +1967,11 @@ function buildVydPdfHtml(cislo, iso, sec, datum, rows, thPipe) {
 <div class="doc-header">
   <div>
     <div class="doc-title">FABRICATION MATERIALS ISSUE SLIP</div>
-    <div class="doc-sub">PMP Montex s.r.o. &nbsp;·&nbsp; Výdajka materiálu z výrobného skladu</div>
+    <div class="doc-sub">WarehousePro &nbsp;·&nbsp; Výdajka materiálu z výrobného skladu</div>
   </div>
   <div class="doc-meta">
-    <strong>Číslo výdajky:</strong> ${cislo}<br>
+    <strong>Projekt:</strong> ${window._currentProject ? window._currentProject.name || window._currentProject.id : '—'}<br>
     <strong>Izometria:</strong> ${iso}<br>
-    <strong>Sekcia:</strong> ${sec||'—'}<br>
     <strong>Dátum:</strong> ${datum}
   </div>
 </div>
@@ -1792,7 +1997,7 @@ function buildVydPdfHtml(cislo, iso, sec, datum, rows, thPipe) {
   <div class="sign-box"><div class="sign-line"></div>Vydal / Issued by</div>
   <div class="sign-box"><div class="sign-line"></div>Prevzal / Received by</div>
   <div class="sign-box"><div class="sign-line"></div>Dátum prevzatia / Date received</div>
-  <div style="flex:2;text-align:right;color:#bbb;font-size:9px">Generované: ${new Date().toLocaleString('sk-SK')} &nbsp;·&nbsp; Warehouse Manager · PMP Montex</div>
+  <div style="flex:2;text-align:right;color:#bbb;font-size:9px">Generované: ${new Date().toLocaleString('sk-SK')} &nbsp;·&nbsp; WarehousePro · WarehousePro</div>
 </div>
 </body></html>`;
 }
@@ -2437,10 +2642,10 @@ window.addEventListener('DOMContentLoaded', function() {
   try {
     firebase.initializeApp({
       apiKey: "AIzaSyD7lqAVEY3-UZAWu-q2o_6YkOkTyyV4tOA",
-      authDomain: "warehouse-montex.firebaseapp.com",
-      databaseURL: "https://warehouse-montex-default-rtdb.europe-west1.firebasedatabase.app",
-      projectId: "warehouse-montex",
-      storageBucket: "warehouse-montex.firebasestorage.app",
+      authDomain: "warehouse-dany.firebaseapp.com",
+      databaseURL: "https://warehouse-dany-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "warehouse-dany",
+      storageBucket: "warehouse-dany.firebasestorage.app",
       messagingSenderId: "1071159413037",
       appId: "1:1071159413037:web:93ffc2eb346b781c5b2ba4"
     });
@@ -2854,7 +3059,7 @@ function renderAdminUsers() {
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">' +
         '<span style="font-weight:700;font-size:14px">Používatelia (' + Object.keys(users).length + ')</span>' +
         '<div style="display:flex;gap:8px">' +
-          '<a href="https://console.firebase.google.com/project/warehouse-montex/authentication/users" target="_blank" ' +
+          '<a href="https://console.firebase.google.com/project/warehouse-dany/authentication/users" target="_blank" ' +
             'style="padding:6px 12px;border:1px solid #4f7cff;color:#4f7cff;border-radius:5px;font-size:12px;text-decoration:none;display:flex;align-items:center;gap:4px">' +
             '🔗 Firebase Auth konzola</a>' +
           '<button onclick="showNewUserForm()" style="padding:6px 14px;background:#4f7cff;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px">+ Nový používateľ</button>' +
@@ -3002,6 +3207,17 @@ function initFirebase() {
     var fbVyd = snap.val() ? Object.values(snap.val()) : [];
     var localVyd = JSON.parse(localStorage.getItem('vydajky_' + base) || '[]');
     vydajkyList = fbVyd.length > 0 ? fbVyd : localVyd;
+  });
+
+  // MTO dáta z Firebase
+  window._fbOn(window._fbRef(base + '/mto'), function(snap) {
+    var fbMTO = snap.val();
+    if (fbMTO && fbMTO.materials && fbMTO.materials.length > 0) {
+      window.mtoData = fbMTO;
+      window.mtoData.loaded = true;
+      updateMTOBadge();
+      window._projectIsos = null; // reset cache
+    }
   });
 }
 
