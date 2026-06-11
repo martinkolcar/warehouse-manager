@@ -1767,10 +1767,38 @@ function saveVydajka(mode) {
 
 function odcitajSklad() {
   vydLines.forEach(l => {
-    if (l.itemIdx === undefined || l.itemIdx === null) return;
     const vydane = l.isPipe ? (parseFloat(l.dlzka)||0)/1000 : (parseFloat(l.vydQty)||0);
-    if (vydane > 0 && items[l.itemIdx]) {
+    if (vydane <= 0) return;
+
+    // Ak má itemIdx — priamy odkaz do skladu
+    if (l.itemIdx !== null && l.itemIdx !== undefined && items[l.itemIdx]) {
       items[l.itemIdx].zostatok = Math.round(((parseFloat(items[l.itemIdx].zostatok)||0) - vydane) * 10000) / 10000;
+      return;
+    }
+
+    // Pre MTO položky (fromMTO) — nájdi v sklade podľa rozmeru a materiálu
+    if (l.fromMTO || l.itemIdx === null) {
+      var rozmer = (l.rozmer||'').toLowerCase().replace(/\s/g,'');
+      var mat = (l.material||'').toLowerCase();
+
+      // Nájdi najlepší match v sklade s dostatočným zostatkom
+      var best = -1;
+      var bestScore = 0;
+      items.forEach(function(it, idx) {
+        if (parseFloat(it.zostatok) <= 0) return;
+        var itRoz = (it.rozmer||'').toLowerCase().replace(/\s/g,'');
+        var itMat = (it.material||'').toLowerCase();
+        var rozMatch = itRoz === rozmer || itRoz.startsWith(rozmer.split('x')[0]) || rozmer.startsWith(itRoz.split('x')[0]);
+        var matMatch = !mat || itMat.includes(mat) || mat.includes(itMat);
+        var score = (rozMatch ? 2 : 0) + (matMatch ? 1 : 0);
+        if (score > bestScore) { bestScore = score; best = idx; }
+      });
+
+      if (best >= 0 && bestScore >= 2) {
+        items[best].zostatok = Math.round(((parseFloat(items[best].zostatok)||0) - vydane) * 10000) / 10000;
+        // Zapamätaj si itemIdx pre budúce referencie
+        l.itemIdx = best;
+      }
     }
   });
 }
