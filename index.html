@@ -2975,17 +2975,23 @@ function doLogin() {
 
     // Prihlás cez Firebase Auth s emailom
     window.auth.signInWithEmailAndPassword(found.email, pass)
-      .catch(function() { showLoginErr(t('errWrong')); });
+      .then(function() {
+        // OK — onAuthStateChanged sa postará o zvyšok
+      })
+      .catch(function(e) {
+        console.log('Login error:', e.code, e.message);
+        showLoginErr(t('errWrong'));
+      });
   }).catch(function() { showLoginErr(t('errWrong')); });
 }
 
 function showLoginErr(msg) {
   var el = document.getElementById('login-err');
-  el.textContent = msg; el.style.display = 'block';
+  if (el) { el.textContent = msg; el.style.display = 'block'; }
   var btn = document.getElementById('login-btn');
   var btxt = document.getElementById('login-btn-text');
-  if(btxt) btxt.textContent = t('login');
-  btn.disabled = false;
+  if (btxt) btxt.textContent = t('login');
+  if (btn) btn.disabled = false;
 }
 
 function doLogout() {
