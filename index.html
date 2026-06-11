@@ -1892,12 +1892,78 @@ async function zapisHeatyDoWeldPro(vydajka) {
       type: 'part', part: 'ALL', chunks: chunks.length,
       count: allData.length, modifiedBy: 'warehouse', date: new Date().toISOString()
     });
-    // Notifikuj WeldPro cez signal
-    if (window.weldproDB) {
-      window.weldproDB.ref('weldbook_signal').set({ ts: Date.now(), by: 'warehouse', iso: isoName });
+    // Notifikuj WeldPro cez Firestore signal
+    if (window.weldproFS) {
+      window.weldproFS.collection('weldbook_signal').doc('latest').set({
+        by: 'warehouse', part: 'ALL', iso: isoName,
+        at: new Date().toISOString(), sessionId: 'warehouse-' + Date.now()
+      });
     }
     console.log('✅ WeldBook heaty zapísané:', isoName, 'changed rows');
   } catch(e) { console.warn('WeldBook save error:', e); }
+}
+
+async function clearHeatyZWeldBooku(vydajka) {
+  if (!window.weldproFS || !vydajka.iso) return;
+  var isoName = vydajka.iso.replace(/\.(dxf|pdf|jpg|png)$/i, '');
+  function normIso(s) { return (s||'').replace(/\.(dxf|pdf|jpg|png)$/i,'').replace(/[._]/g,'_').toLowerCase(); }
+  var isoNameNorm = normIso(isoName);
+
+  var allData = [];
+  try {
+    var mainDoc = await window.weldproFS.collection('weldbook').doc('weldbook_main').get();
+    if (!mainDoc.exists) return;
+    var meta = mainDoc.data();
+    var chunkDocs = [];
+    for (var ci = 0; ci < (meta.chunks||1); ci++) {
+      chunkDocs.push(await window.weldproFS.collection('weldbook').doc('weldbook_main').collection('data').doc('c'+ci).get());
+    }
+    allData = JSON.parse(chunkDocs.filter(function(c){return c.exists;}).map(function(c){return c.data().d;}).join(''));
+  } catch(e) { return; }
+
+  // Zisti typy z vydajky
+  var typyVydajky = {};
+  (vydajka.lines||[]).forEach(function(l) {
+    var wbTyp = wbShortType(l.typ);
+    if (!wbTyp) return;
+    var dim = (l.rozmer||'').split('x')[0];
+    typyVydajky[wbTyp + '||' + dim] = true;
+  });
+
+  var changed = false;
+  allData.forEach(function(r) {
+    if (normIso(r.isometric) !== isoNameNorm) return;
+    // Vymaž heat pre položky ktoré boli v tejto vydajke — bez ohľadu na dátum zvárania
+    if (typyVydajky[(r.item1||'').toUpperCase() + '||' + (r.dimension1||'')]) {
+      if (r.heatNr1) { r.heatNr1 = ''; changed = true; }
+    }
+    if (typyVydajky[(r.item2||'').toUpperCase() + '||' + (r.dimension2||'')]) {
+      if (r.heatNr2) { r.heatNr2 = ''; changed = true; }
+    }
+  });
+
+  if (!changed) return;
+
+  try {
+    var WB_CHUNK_SIZE = 400 * 1024;
+    var json = JSON.stringify(allData);
+    var chunks = [];
+    for (var i = 0; i < json.length; i += WB_CHUNK_SIZE) chunks.push(json.slice(i, i + WB_CHUNK_SIZE));
+    await Promise.all(chunks.map(function(c, i) {
+      return window.weldproFS.collection('weldbook').doc('weldbook_main').collection('data').doc('c'+i).set({d: c});
+    }));
+    await window.weldproFS.collection('weldbook').doc('weldbook_main').set({
+      type: 'part', part: 'ALL', chunks: chunks.length,
+      count: allData.length, modifiedBy: 'warehouse', date: new Date().toISOString()
+    });
+    if (window.weldproFS) {
+      window.weldproFS.collection('weldbook_signal').doc('latest').set({
+        by: 'warehouse', part: 'ALL', iso: isoName,
+        at: new Date().toISOString(), sessionId: 'warehouse-' + Date.now()
+      });
+    }
+    console.log('✅ WeldBook heaty vymazané:', isoName);
+  } catch(e) { console.warn('clearHeaty error:', e); }
 }
 
 function wbShortType(typ) {
@@ -2414,14 +2480,14 @@ function deleteVydajka(idx) {
       items[found].zostatok = Math.round(((parseFloat(items[found].zostatok)||0) + (parseFloat(l.vydQty)||0)) * 10000) / 10000;
     }
   });
+
+  // Vymaž heaty z WeldBooku
+  clearHeatyZWeldBooku(v);
+
   vydajkyList.splice(idx, 1);
   save();
   saveVydajkyFb();
   render();
-
-  // Zapíš/aktualizuj heaty vo WeldPro
-  var _vydObj = vydajkyList[vydEditIdx !== null ? vydEditIdx : vydajkyList.length-1];
-  if (_vydObj) zapisHeatyDoWeldPro(_vydObj);
   openVydajkyZoznam();
   setStatus('Výdajka vymazaná, množstvá vrátené do skladu.', 'ok');
 }
