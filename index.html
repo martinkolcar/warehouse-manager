@@ -9,6 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-database-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-auth-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-firestore-compat.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: Arial, sans-serif; background: #f0f2f5; color: #1a1a2e; font-size: 14px; }
@@ -1753,6 +1754,10 @@ function saveVydajka(mode) {
   saveVydajkyFb();
   render();
 
+  // Zapíš/aktualizuj heaty vo WeldPro
+  var _vydObj = vydajkyList[vydEditIdx !== null ? vydEditIdx : vydajkyList.length-1];
+  if (_vydObj) zapisHeatyDoWeldPro(_vydObj);
+
   if (mode === 'pdf') openVydNahladFromData(vydajkyList[vydEditIdx !== null ? vydEditIdx : vydajkyList.length-1]);
 
   // Reset po uložení — priprav na novú
@@ -1798,6 +1803,84 @@ function odcitajSklad() {
         items[best].zostatok = Math.round(((parseFloat(items[best].zostatok)||0) - vydane) * 10000) / 10000;
         // Zapamätaj si itemIdx pre budúce referencie
         l.itemIdx = best;
+      }
+    }
+  });
+}
+
+// ─── ZÁPIS / MAZANIE HEAT VO WELDPRO ────────────────────────────────
+// Logika:
+// - Pre každý typ+rozmer v vydajke zisti tavby
+// - Ak JEDNa tavba → zapíš heat do všetkých zvarov kde je ten fiting (bez dátumu zvárania nechaj prázdne ale zapíš tam kde je)
+// - Ak VIAC tavíeb → vymaž heat tam kde NIE JE dátum zvárania
+async function zapisHeatyDoWeldPro(vydajka) {
+  if (!window.weldproDB) { console.warn('WeldPro DB nie je dostupná'); return; }
+  if (!vydajka.iso || !vydajka.sec) return;
+
+  var sec = (vydajka.sec || '').toUpperCase();
+  var isoKey = vydajka.iso.replace(/[^a-zA-Z0-9_\-]/g, '_');
+  var basePath = 'isomanager/sections/' + sec + '/' + isoKey + '/heats';
+
+  // Zisti koľko rôznych tavíeb má každý typ+rozmer V TEJTO VYDAJKE
+  var tavbyMap = {}; // key = typ||rozmer → Set tavíeb
+  vydajka.lines.forEach(function(l) {
+    if (!l.tavba) return;
+    var key = l.typ + '||' + l.rozmer;
+    if (!tavbyMap[key]) tavbyMap[key] = new Set();
+    tavbyMap[key].add(l.tavba.trim().toUpperCase());
+  });
+
+  // Teraz načítaj WeldBook zvary pre túto izometriu z Firestore
+  var weldBookRows = [];
+  try {
+    if (window.weldproFS) {
+      // Načítaj z weldbook_main
+      var mainDoc = await window.weldproFS.collection('weldbook').doc('weldbook_main').get();
+      if (mainDoc.exists) {
+        var meta = mainDoc.data();
+        var chunkDocs = [];
+        for (var ci = 0; ci < (meta.chunks||1); ci++) {
+          chunkDocs.push(await window.weldproFS.collection('weldbook').doc('weldbook_main').collection('data').doc('c'+ci).get());
+        }
+        var allData = JSON.parse(chunkDocs.filter(function(c){return c.exists;}).map(function(c){return c.data().d;}).join(''));
+        // Filtruj len pre túto izometriu
+        weldBookRows = allData.filter(function(r){ return (r.isometric||'') === vydajka.iso; });
+      }
+    }
+  } catch(e) { console.warn('WeldBook načítanie:', e); }
+
+  // Spracuj každý typ+rozmer
+  Object.keys(tavbyMap).forEach(function(key) {
+    var parts = key.split('||');
+    var typ = parts[0];
+    var rozmer = parts[1];
+    var tavby = tavbyMap[key];
+    var typKey = (typ + '_' + rozmer).replace(/[^a-zA-Z0-9_\-]/g, '_');
+    var path = basePath + '/' + typKey;
+
+    if (tavby.size === 1) {
+      // Jedna tavba → zapíš
+      var heat = Array.from(tavby)[0];
+      window.weldproDB.ref(path).set({
+        heat: heat, typ: typ, rozmer: rozmer,
+        material: vydajka.lines.find(function(l){return l.typ===typ&&l.rozmer===rozmer;})?.material || '',
+        updatedAt: Date.now()
+      });
+      console.log('✅ Heat zapísaný:', typKey, '=', heat);
+    } else {
+      // Viac tavíeb → vymaž heat tam kde nie je dátum zvárania vo WeldBooku
+      // Nájdi zvary kde je tento fiting a nemá dátum zvárania
+      var needClear = weldBookRows.filter(function(r) {
+        var hasThisFiting = (r.item1||'').toUpperCase().includes(typ.toUpperCase()) ||
+                           (r.item2||'').toUpperCase().includes(typ.toUpperCase());
+        var hasDatum = r.dateOfWelding || r.weldDate || r.date;
+        return hasThisFiting && !hasDatum;
+      });
+
+      if (needClear.length > 0) {
+        // Vymaž heat pre tento typ+rozmer
+        window.weldproDB.ref(path).remove();
+        console.log('🗑 Heat vymazaný (viac tavíeb, bez dátumu):', typKey, '- zvarov:', needClear.length);
       }
     }
   });
@@ -2309,6 +2392,10 @@ function deleteVydajka(idx) {
   save();
   saveVydajkyFb();
   render();
+
+  // Zapíš/aktualizuj heaty vo WeldPro
+  var _vydObj = vydajkyList[vydEditIdx !== null ? vydEditIdx : vydajkyList.length-1];
+  if (_vydObj) zapisHeatyDoWeldPro(_vydObj);
   openVydajkyZoznam();
   setStatus('Výdajka vymazaná, množstvá vrátené do skladu.', 'ok');
 }
@@ -2815,6 +2902,22 @@ window.addEventListener('DOMContentLoaded', function() {
     window._fbSet  = function(ref,val){ return ref.set(val); };
     window._fbOn   = function(ref,cb,err){ return ref.on('value',cb,err||function(){}); };
     window._fbReady = true;
+
+    // WeldPro Firebase — pre zápis heat čísel
+    try {
+      var _wpApp = firebase.apps.filter(function(a){return a.name==='weldpro';})[0] ||
+        firebase.initializeApp({
+          apiKey: "AIzaSyCI-WXOAfRtM1pvMseR0PFppp5f1WjOkcc",
+          authDomain: "weldpro-dany.firebaseapp.com",
+          databaseURL: "https://weldpro-dany-default-rtdb.europe-west1.firebasedatabase.app",
+          projectId: "weldpro-dany",
+          storageBucket: "weldpro-dany.firebasestorage.app",
+          messagingSenderId: "319198298733",
+          appId: "1:319198298733:web:e90ff234366c88a5eccaf3"
+        }, 'weldpro');
+      window.weldproDB = _wpApp.database();
+      window.weldproFS = _wpApp.firestore();
+    } catch(e) { console.warn('WeldPro Firebase init:', e); }
   } catch(e) {
     window._fbReady = false;
   }
