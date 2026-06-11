@@ -1815,10 +1815,13 @@ function odcitajSklad() {
 // - Ak VIAC tavíeb → vymaž heat tam kde NIE JE dátum zvárania
 async function zapisHeatyDoWeldPro(vydajka) {
   if (!window.weldproDB) { console.warn('WeldPro DB nie je dostupná'); return; }
-  if (!vydajka.iso || !vydajka.sec) return;
+  if (!vydajka.iso) return;
 
-  var sec = (vydajka.sec || '').toUpperCase();
-  var isoKey = vydajka.iso.replace(/[^a-zA-Z0-9_\-]/g, '_');
+  // Sekcia = sec alebo projekt ID (napr. "dany" → "DANY")
+  var sec = (vydajka.sec || (_currentProject ? _currentProject.id : '') || '').toUpperCase();
+  if (!sec) return;
+  // Vyčisti iso názov — odstráň príponu a špeciálne znaky
+  var isoKey = vydajka.iso.replace(/\.(dxf|pdf|jpg|png)$/i, '').replace(/[^a-zA-Z0-9_\-]/g, '_');
   var basePath = 'isomanager/sections/' + sec + '/' + isoKey + '/heats';
 
   // Zisti koľko rôznych tavíeb má každý typ+rozmer V TEJTO VYDAJKE
