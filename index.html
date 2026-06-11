@@ -2955,8 +2955,9 @@ function doLogin() {
   var pass  = document.getElementById('login-pass').value;
   var btn   = document.getElementById('login-btn-text');
   if (!name || !pass) { showLoginErr(t('errEmpty')); return; }
-  btn.textContent = t('logging');
-  document.getElementById('login-btn').disabled = true;
+  if (btn) btn.textContent = t('logging');
+  var loginBtn = document.getElementById('login-btn');
+  if (loginBtn) loginBtn.disabled = true;
   document.getElementById('login-err').style.display = 'none';
 
   // Nájdi používateľa podľa mena v DB (case-insensitive)
