@@ -311,6 +311,7 @@ table.main td.center { text-align: center; }
   <button id="btn-add" class="btn btn-gray" onclick="openAddModal()">+ Pridať ručne</button>
   <button id="btn-csv" class="btn btn-gray" onclick="exportCSV()">⬇ Export CSV</button>
   <button id="btn-vydajky" class="btn btn-gray" onclick="openVydajkyZoznam()" style="background:#f0f4ff;border-color:#4f7cff;color:#4f7cff">📋 Výdajky</button>
+  <button id="btn-co-mozeme" class="btn btn-gray" onclick="openCoMozeme()" style="background:#f0fdf4;border-color:#10b981;color:#065f46">✅ Čo môžeme robiť</button>
   <button id="migrate-btn" class="btn btn-gray" onclick="migrateToFirebase()" style="display:none;background:#fff7ed;border-color:#f59e0b;color:#b45309">☁ Preniesť do cloudu</button>
   <span style="flex:1"></span>
   <button id="btn-delete-all" class="btn btn-red" onclick="clearAll()">🗑 Vymazať všetko</button>
@@ -1993,6 +1994,24 @@ function buildVydPdfHtml(cislo, iso, sec, datum, rows, thPipe) {
 }
 </script>
 
+<!-- ČO MÔŽEME ROBIŤ MODAL -->
+<div id="co-mozeme-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1500;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;width:92vw;max-width:900px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.25);overflow:hidden">
+    <div style="background:#065f46;color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0">
+      <span style="font-size:15px;font-weight:700">✅ Čo môžeme robiť — dostupný materiál</span>
+      <span id="co-mozeme-count" style="font-size:11px;color:#a7f3d0"></span>
+      <div style="flex:1"></div>
+      <button onclick="document.getElementById('co-mozeme-overlay').style.display='none'"
+        style="background:none;border:1px solid #34d399;color:#fff;padding:5px 14px;border-radius:5px;cursor:pointer;font-size:13px">✕ Zavrieť</button>
+    </div>
+    <div style="padding:12px 18px;background:#f0fdf4;border-bottom:1px solid #d1fae5;flex-shrink:0;font-size:12px;color:#065f46">
+      💡 Izometrie kde máme v sklade aspoň <strong>2 zvárateľné materiály</strong> (PIPE, ELBOW, FLANGE, TEE, REDUCER, CAP, BRANCH)
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:14px 18px" id="co-mozeme-body">
+    </div>
+  </div>
+</div>
+
 <!-- ZOZNAM VÝDAJOK MODAL -->
 <div id="zoznam-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1500;align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:12px;width:92vw;max-width:1000px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.25);overflow:hidden">
@@ -2035,6 +2054,119 @@ function buildVydPdfHtml(cislo, iso, sec, datum, rows, thPipe) {
 </div>
 
 <script>
+function openCoMozeme() {
+  if (!window.mtoData || !window.mtoData.loaded || !window.mtoData.isoList.length) {
+    alert('Najprv načítajte MTO Excel (kliknite na zelený MTO badge).');
+    return;
+  }
+
+  const WELD_TYPES_SET = new Set(['PIPE','ELBOW','FLANGE','TEE','REDUCER','CAP','BRANCH','VALVE']);
+
+  // Pre každú izometriu z MTO skontroluj čo je v sklade
+  const results = [];
+
+  window.mtoData.isoList.forEach(function(iso) {
+    const mtoItems = getMTOForIso(iso).filter(m => m.weldType && WELD_TYPES_SET.has(m.weldType));
+    if (!mtoItems.length) return;
+
+    // Zisti čo máme v sklade pre túto izometriu
+    const available = [];
+    const missing = [];
+
+    mtoItems.forEach(function(m) {
+      var dims = extractDimsFromPopis(m.popis);
+      var mat = extractMaterialFromPopis(m.popis);
+      var dnW = getWeldableDN(m.dn);
+
+      // Hľadaj v sklade - porovnaj podľa rozmeru a materiálu
+      var found = items.filter(function(it) {
+        if (parseFloat(it.zostatok) <= 0) return false;
+        var itRoz = (it.rozmer||'').toLowerCase().replace(/\s/g,'');
+        var mRoz = (dims.size||dnW||'').toLowerCase().replace(/\s/g,'');
+        var itMat = (it.material||'').toLowerCase();
+        var mMat = (mat||'').toLowerCase();
+        // Rozmer match (aspoň prvé číslo)
+        var rozMatch = itRoz.includes(mRoz) || mRoz.includes(itRoz) ||
+                       itRoz.split('x')[0] === mRoz.split('x')[0];
+        var matMatch = !mMat || itMat.includes(mMat) || mMat.includes(itMat);
+        return rozMatch && matMatch;
+      });
+
+      var totalStock = found.reduce(function(s, it) {
+        return s + (parseFloat(it.zostatok)||0);
+      }, 0);
+
+      var entry = {
+        weldType: m.weldType,
+        dn: dnW,
+        dims: dims.size||dnW,
+        mat: mat,
+        popis: m.popis.substring(0,60),
+        poz: m.poz,
+        mn: m.mn,
+        stock: totalStock,
+        stockItems: found.length,
+        tavby: found.map(function(it){ return it.tavba; }).filter(Boolean).join(', ')
+      };
+
+      if (found.length > 0) available.push(entry);
+      else missing.push(entry);
+    });
+
+    if (available.length >= 2) {
+      results.push({
+        iso: iso,
+        available: available,
+        missing: missing,
+        score: available.length
+      });
+    }
+  });
+
+  // Zoraď podľa počtu dostupných materiálov
+  results.sort(function(a, b) { return b.score - a.score; });
+
+  // Render
+  document.getElementById('co-mozeme-count').textContent =
+    results.length + ' izometrií pripravených na prácu';
+
+  const body = document.getElementById('co-mozeme-body');
+
+  if (!results.length) {
+    body.innerHTML = '<div style="text-align:center;padding:40px;color:#aaa">Žiadna izometria nemá dostatok materiálu v sklade.<br>Nahrajte dodacie listy do skladu.</div>';
+  } else {
+    body.innerHTML = results.map(function(r) {
+      const availHtml = r.available.map(function(m) {
+        var typeColors = {PIPE:'#dbeafe',ELBOW:'#dcfce7',TEE:'#fef9c3',REDUCER:'#fce7f3',FLANGE:'#ede9fe',CAP:'#ffedd5',VALVE:'#fee2e2',BRANCH:'#ccfbf1'};
+        var bg = typeColors[m.weldType]||'#f1f5f9';
+        var stockStr = m.stockItems > 0 ? (m.stock > 0 ? '<span style="color:#16a34a;font-weight:700">' + m.stock.toFixed(1) + ' ' + (m.weldType==='PIPE'?'m':'ks') + '</span>' : '') : '';
+        return '<span style="display:inline-flex;align-items:center;gap:4px;background:'+bg+';padding:3px 8px;border-radius:4px;font-size:11px;margin:2px">' +
+          '<strong>'+m.weldType+'</strong> DN'+m.dn +
+          (stockStr ? ' · '+stockStr : '') +
+          (m.tavby ? ' · <span style="color:#666;font-family:monospace">'+m.tavby.substring(0,20)+'</span>' : '') +
+          '</span>';
+      }).join('');
+
+      const missingHtml = r.missing.length ? r.missing.map(function(m) {
+        return '<span style="display:inline-flex;align-items:center;gap:4px;background:#fef2f2;border:1px solid #fca5a5;padding:2px 6px;border-radius:4px;font-size:10px;margin:2px;color:#dc2626">' +
+          m.weldType + ' DN'+m.dn + '</span>';
+      }).join('') : '';
+
+      return '<div style="border:1px solid #d1fae5;border-radius:8px;padding:14px;margin-bottom:10px;background:#fff">' +
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
+          '<span style="font-family:monospace;font-weight:700;font-size:13px;color:#065f46">' + r.iso + '</span>' +
+          '<span style="background:#10b981;color:#fff;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:700">' + r.score + ' mat.</span>' +
+          '<button onclick="document.getElementById(\'co-mozeme-overlay\').style.display=\'none\';openVydajkaWindow()" style="margin-left:auto;padding:4px 12px;background:#4f7cff;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px">📋 Vydajka</button>' +
+        '</div>' +
+        '<div style="margin-bottom:6px">' + availHtml + '</div>' +
+        (r.missing.length ? '<div style="font-size:10px;color:#888;margin-top:4px">Chýba: ' + missingHtml + '</div>' : '') +
+        '</div>';
+    }).join('');
+  }
+
+  document.getElementById('co-mozeme-overlay').style.display = 'flex';
+}
+
 function openVydajkyZoznam() {
   // Naplň filter selecty z vydajkyList
   const allRozmery = [...new Set(vydajkyList.flatMap(v=>(v.lines||[]).map(l=>l.rozmer)).filter(Boolean))].sort();
