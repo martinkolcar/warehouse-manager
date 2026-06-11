@@ -1844,8 +1844,12 @@ async function zapisHeatyDoWeldPro(vydajka) {
 
   var changed = false;
 
+  // Normalizuj iso názov pre porovnanie (bodky aj podčiarkovníky sú ekvivalentné)
+  function normIso(s) { return (s||'').replace(/\.(dxf|pdf|jpg|png)$/i,'').replace(/[._]/g,'_').toLowerCase(); }
+  var isoNameNorm = normIso(isoName);
+
   allData.forEach(function(r) {
-    if ((r.isometric||'') !== isoName) return;
+    if (normIso(r.isometric) !== isoNameNorm) return;
 
     Object.keys(tavbyMap).forEach(function(key) {
       var parts = key.split('||');
