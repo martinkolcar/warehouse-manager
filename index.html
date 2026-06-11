@@ -1808,86 +1808,105 @@ function odcitajSklad() {
   });
 }
 
-// ─── ZÁPIS / MAZANIE HEAT VO WELDPRO ────────────────────────────────
-// Logika:
-// - Pre každý typ+rozmer v vydajke zisti tavby
-// - Ak JEDNa tavba → zapíš heat do všetkých zvarov kde je ten fiting (bez dátumu zvárania nechaj prázdne ale zapíš tam kde je)
-// - Ak VIAC tavíeb → vymaž heat tam kde NIE JE dátum zvárania
+// ─── ZÁPIS / MAZANIE HEAT VO WELDPRO WELDBOOK ────────────────────────────────
 async function zapisHeatyDoWeldPro(vydajka) {
-  if (!window.weldproDB) { console.warn('WeldPro DB nie je dostupná'); return; }
+  if (!window.weldproFS) { console.warn('WeldPro Firestore nie je dostupný'); return; }
   if (!vydajka.iso) return;
 
-  // Sekcia = sec alebo projekt ID (napr. "dany" → "DANY")
-  var sec = (vydajka.sec || (_currentProject ? _currentProject.id : '') || '').toUpperCase();
-  if (!sec) return;
-  // Vyčisti iso názov — odstráň príponu a špeciálne znaky
-  var isoKey = vydajka.iso.replace(/\.(dxf|pdf|jpg|png)$/i, '').replace(/[^a-zA-Z0-9_\-]/g, '_');
-  var basePath = 'isomanager/sections/' + sec + '/' + isoKey + '/heats';
+  var isoName = vydajka.iso.replace(/\.(dxf|pdf|jpg|png)$/i, '');
 
-  // Zisti koľko rôznych tavíeb má každý typ+rozmer V TEJTO VYDAJKE
-  var tavbyMap = {}; // key = typ||rozmer → Set tavíeb
+  // Zisti tavby pre každý typ v vydajke
+  var tavbyMap = {};
   vydajka.lines.forEach(function(l) {
     if (!l.tavba) return;
-    var key = l.typ + '||' + l.rozmer;
+    var wbTyp = wbShortType(l.typ);
+    if (!wbTyp) return;
+    var dim = (l.rozmer||'').split('x')[0];
+    var key = wbTyp + '||' + dim;
     if (!tavbyMap[key]) tavbyMap[key] = new Set();
     tavbyMap[key].add(l.tavba.trim().toUpperCase());
   });
 
-  // Teraz načítaj WeldBook zvary pre túto izometriu z Firestore
-  var weldBookRows = [];
+  if (!Object.keys(tavbyMap).length) return;
+
+  // Načítaj WeldBook chunks
+  var allData = [];
   try {
-    if (window.weldproFS) {
-      // Načítaj z weldbook_main
-      var mainDoc = await window.weldproFS.collection('weldbook').doc('weldbook_main').get();
-      if (mainDoc.exists) {
-        var meta = mainDoc.data();
-        var chunkDocs = [];
-        for (var ci = 0; ci < (meta.chunks||1); ci++) {
-          chunkDocs.push(await window.weldproFS.collection('weldbook').doc('weldbook_main').collection('data').doc('c'+ci).get());
+    var mainDoc = await window.weldproFS.collection('weldbook').doc('weldbook_main').get();
+    if (!mainDoc.exists) return;
+    var meta = mainDoc.data();
+    var chunkDocs = [];
+    for (var ci = 0; ci < (meta.chunks||1); ci++) {
+      chunkDocs.push(await window.weldproFS.collection('weldbook').doc('weldbook_main').collection('data').doc('c'+ci).get());
+    }
+    allData = JSON.parse(chunkDocs.filter(function(c){return c.exists;}).map(function(c){return c.data().d;}).join(''));
+  } catch(e) { console.warn('WeldBook načítanie:', e); return; }
+
+  var changed = false;
+
+  allData.forEach(function(r) {
+    if ((r.isometric||'') !== isoName) return;
+
+    Object.keys(tavbyMap).forEach(function(key) {
+      var parts = key.split('||');
+      var wbTyp = parts[0];
+      var dim = parts[1];
+      var tavby = tavbyMap[key];
+      var heat1 = tavby.size === 1 ? Array.from(tavby)[0] : '';
+
+      // item1
+      if ((r.item1||'').toUpperCase().includes(wbTyp) && (r.dimension1||'').toString() === dim) {
+        if (tavby.size === 1) {
+          if (r.heatNr1 !== heat1) { r.heatNr1 = heat1; changed = true; }
+        } else if (!r.dateWelding && r.heatNr1) {
+          r.heatNr1 = ''; changed = true;
         }
-        var allData = JSON.parse(chunkDocs.filter(function(c){return c.exists;}).map(function(c){return c.data().d;}).join(''));
-        // Filtruj len pre túto izometriu
-        weldBookRows = allData.filter(function(r){ return (r.isometric||'') === vydajka.iso; });
       }
-    }
-  } catch(e) { console.warn('WeldBook načítanie:', e); }
-
-  // Spracuj každý typ+rozmer
-  Object.keys(tavbyMap).forEach(function(key) {
-    var parts = key.split('||');
-    var typ = parts[0];
-    var rozmer = parts[1];
-    var tavby = tavbyMap[key];
-    var typKey = (typ + '_' + rozmer).replace(/[^a-zA-Z0-9_\-]/g, '_');
-    var path = basePath + '/' + typKey;
-
-    if (tavby.size === 1) {
-      // Jedna tavba → zapíš
-      var heat = Array.from(tavby)[0];
-      window.weldproDB.ref(path).set({
-        heat: heat, typ: typ, rozmer: rozmer,
-        material: vydajka.lines.find(function(l){return l.typ===typ&&l.rozmer===rozmer;})?.material || '',
-        updatedAt: Date.now()
-      });
-      console.log('✅ Heat zapísaný:', typKey, '=', heat);
-    } else {
-      // Viac tavíeb → vymaž heat tam kde nie je dátum zvárania vo WeldBooku
-      // Nájdi zvary kde je tento fiting a nemá dátum zvárania
-      var needClear = weldBookRows.filter(function(r) {
-        var hasThisFiting = (r.item1||'').toUpperCase().includes(typ.toUpperCase()) ||
-                           (r.item2||'').toUpperCase().includes(typ.toUpperCase());
-        var hasDatum = r.dateOfWelding || r.weldDate || r.date;
-        return hasThisFiting && !hasDatum;
-      });
-
-      if (needClear.length > 0) {
-        // Vymaž heat pre tento typ+rozmer
-        window.weldproDB.ref(path).remove();
-        console.log('🗑 Heat vymazaný (viac tavíeb, bez dátumu):', typKey, '- zvarov:', needClear.length);
+      // item2
+      if ((r.item2||'').toUpperCase().includes(wbTyp) && (r.dimension2||'').toString() === dim) {
+        if (tavby.size === 1) {
+          if (r.heatNr2 !== heat1) { r.heatNr2 = heat1; changed = true; }
+        } else if (!r.dateWelding && r.heatNr2) {
+          r.heatNr2 = ''; changed = true;
+        }
       }
-    }
+    });
   });
+
+  if (!changed) { console.log('ℹ Heat — žiadne zmeny pre', isoName); return; }
+
+  // Ulož späť do Firestore
+  try {
+    var WB_CHUNK_SIZE = 400 * 1024;
+    var json = JSON.stringify(allData);
+    var chunks = [];
+    for (var i = 0; i < json.length; i += WB_CHUNK_SIZE) chunks.push(json.slice(i, i + WB_CHUNK_SIZE));
+    await Promise.all(chunks.map(function(c, i) {
+      return window.weldproFS.collection('weldbook').doc('weldbook_main').collection('data').doc('c'+i).set({d: c});
+    }));
+    await window.weldproFS.collection('weldbook').doc('weldbook_main').set({
+      type: 'part', part: 'ALL', chunks: chunks.length,
+      count: allData.length, modifiedBy: 'warehouse', date: new Date().toISOString()
+    });
+    // Notifikuj WeldPro cez signal
+    if (window.weldproDB) {
+      window.weldproDB.ref('weldbook_signal').set({ ts: Date.now(), by: 'warehouse', iso: isoName });
+    }
+    console.log('✅ WeldBook heaty zapísané:', isoName, 'changed rows');
+  } catch(e) { console.warn('WeldBook save error:', e); }
 }
+
+function wbShortType(typ) {
+  var t = (typ||'').toUpperCase();
+  if (t.includes('PIPE') || t.includes('RÚRA') || t.includes('RURA')) return 'PIPE';
+  if (t.includes('ELBOW') || t.includes('OBLÚK') || t.includes('OBLUK') || t.includes('KOLENO')) return 'ELBOW';
+  if (t.includes('T-PIECE') || t.includes('TEE') || t.includes('T-KUS')) return 'TEE';
+  if (t.includes('REDUCER') || t.includes('REDUKCI')) return 'REDUCER';
+  if (t.includes('FLANGE') || t.includes('PRÍRUBA') || t.includes('PRIRUBA')) return 'FLANGE';
+  if (t.includes('CAP') || t.includes('ZÁSLEPKA') || t.includes('ZASLEPKA')) return 'CAP';
+  return null;
+}
+
 
 function buildVydajkaObj(datum) {
   const d = new Date();
