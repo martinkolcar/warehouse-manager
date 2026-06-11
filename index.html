@@ -2053,6 +2053,9 @@ function buildVydPdfHtml(cislo, iso, sec, datum, rows, thPipe) {
     <!-- Filter vo výdajkách -->
     <div style="padding:10px 18px;background:#f7f8fa;border-bottom:1px solid #dde1e7;display:flex;gap:10px;align-items:center;flex-wrap:wrap;flex-shrink:0">
       <label style="font-size:12px;color:#555;font-weight:600">Hľadaj položku:</label>
+      <select id="zf-typ" onchange="renderZoznam()" style="padding:5px 8px;border:1px solid #ccc;border-radius:5px;font-size:12px;min-width:120px">
+        <option value="">— typ —</option>
+      </select>
       <select id="zf-rozmer" onchange="renderZoznam()" style="padding:5px 8px;border:1px solid #ccc;border-radius:5px;font-size:12px;min-width:130px">
         <option value="">— rozmer —</option>
       </select>
@@ -2197,8 +2200,12 @@ function openCoMozeme() {
 
 function openVydajkyZoznam() {
   // Naplň filter selecty z vydajkyList
+  const allTypy    = [...new Set(vydajkyList.flatMap(v=>(v.lines||[]).map(l=>l.typ)).filter(Boolean))].sort();
   const allRozmery = [...new Set(vydajkyList.flatMap(v=>(v.lines||[]).map(l=>l.rozmer)).filter(Boolean))].sort();
   const allMaty    = [...new Set(vydajkyList.flatMap(v=>(v.lines||[]).map(l=>l.material)).filter(Boolean))].sort();
+  document.getElementById('zf-typ').innerHTML =
+    '<option value="">— typ —</option>' +
+    allTypy.map(v=>`<option value="${v}">${v}</option>`).join('');
   document.getElementById('zf-rozmer').innerHTML =
     '<option value="">— rozmer —</option>' +
     allRozmery.map(v=>`<option value="${v}">${v}</option>`).join('');
@@ -2211,6 +2218,7 @@ function openVydajkyZoznam() {
 }
 
 function clearZoznamFilter() {
+  document.getElementById('zf-typ').value = '';
   document.getElementById('zf-rozmer').value = '';
   document.getElementById('zf-mat').value = '';
   document.getElementById('zf-tavba').value = '';
@@ -2218,11 +2226,12 @@ function clearZoznamFilter() {
 }
 
 function renderZoznam() {
+  const fTyp    = document.getElementById('zf-typ').value;
   const fRozmer = document.getElementById('zf-rozmer').value;
   const fMat    = document.getElementById('zf-mat').value;
   const fTavba  = document.getElementById('zf-tavba').value.toLowerCase().trim();
   const tbody   = document.getElementById('zoznam-tbody');
-  const hasFilter = fRozmer || fMat || fTavba;
+  const hasFilter = fTyp || fRozmer || fMat || fTavba;
 
   const list = vydajkyList;
   document.getElementById('zoznam-count').textContent = list.length + ' výdajok';
@@ -2243,6 +2252,7 @@ function renderZoznam() {
 
     // Nájdi matchujúce položky
     const matched = hasFilter ? lines.filter(l =>
+      (!fTyp    || (l.typ||'').includes(fTyp)) &&
       (!fRozmer || l.rozmer === fRozmer) &&
       (!fMat    || (l.material||'') === fMat) &&
       (!fTavba  || (l.tavba||'').toLowerCase().includes(fTavba))
