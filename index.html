@@ -1546,7 +1546,9 @@ function renderVydMatList() {
       const q = parseFloat(it.zostatok)||0;
       const qClass = q<=0?'qty-zero':q<3?'qty-low':'qty-ok';
       const qStr = it.jednotka==='m'?q.toFixed(2)+' m':q+' ks';
-      const isVynimka = hasMTO && !mtoKeys.has((it.typ||'').toUpperCase()+'|'+(it.rozmer||'')) && !mtoKeys.has((it.typ||'').toUpperCase()+'|'+(it.rozmer||'').replace('mm',''));
+      const _wt = classifySkladTyp(it.typ);
+      const _rn = (it.rozmer||'').replace(/mm$/i,'').trim();
+      const isVynimka = hasMTO && !mtoKeys.has(_wt+'|'+_rn) && !mtoKeys.has(_wt+'|'+(it.rozmer||''));
       return `<div class="vyd-mat-row" onclick="addToVydajka(${realIdx})" style="${isVynimka?'border-left:3px solid #f59e0b;':''}">
         <div class="mat-info">
           <div><span class="badge badge-${typClass(it.typ)}">${shortType(it.typ)}</span>
