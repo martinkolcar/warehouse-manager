@@ -1682,36 +1682,53 @@ function applyRezany(idx, onSklad45, needed45) {
   const count90 = parseInt(document.getElementById('rezany-count').value)||1;
   document.getElementById('rezany-overlay').remove();
 
-  const gained45 = count90 * 2;        // 1× ELBOW90 = 2× ELBOW45
-  const extra45  = gained45 - needed45; // zostatok ide do skladu
+  const gained45  = count90 * 2;              // 1× ELBOW90 = 2× ELBOW45
+  const use45from90 = gained45;               // koľko ELBOW45 získame z rezania
+  const use45fromStock = Math.min(onSklad45, needed45 - use45from90 > 0 ? needed45 - use45from90 : 0);
+  // Koľko ELBOW45 ostane do skladu (gained - použité na izometriu čo nepokrýva sklad)
+  const totalCovered = use45from90 + use45fromStock;
+  const extra45 = totalCovered - needed45;    // zvyšok ide do skladu
   const rozmerNorm = (it.rozmer||'');
+  const tbody = document.getElementById('vyd-lines-tbody');
 
-  // 1. Vydaj ELBOW90 zo skladu → do vydajky
+  // 1. Vydaj ELBOW45 zo skladu (ak nejaké sú) → samostatný zelený riadok
+  const e45idx = items.findIndex(it2 =>
+    classifySkladTyp(it2.typ) === 'ELBOW45' && (it2.rozmer||'') === rozmerNorm
+  );
+  if (e45idx >= 0 && use45fromStock > 0) {
+    addToVydajkaDirect(e45idx, use45fromStock);
+    const e45lineIdx = vydLines.length - 1;
+    vydLines[e45lineIdx].vydQty = use45fromStock;
+    const e45row = tbody.querySelectorAll('tr')[e45lineIdx];
+    if (e45row) {
+      e45row.style.background = '#f0fdf4';
+      e45row.cells[0].innerHTML +=
+        '<br><span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;font-weight:700">✅</span>';
+    }
+  }
+
+  // 2. Vydaj ELBOW90 → rozrezať → zelený riadok s nožnicami
   addToVydajkaDirect(idx, count90);
   const lineIdx = vydLines.length - 1;
   vydLines[lineIdx].rezanyZ      = 'ELBOW90';
   vydLines[lineIdx].rezanyNa     = 'ELBOW45';
   vydLines[lineIdx].rezanyGained = gained45;
   vydLines[lineIdx].vydQty       = count90;
-
-  // Zelený štítok: "✂️ 2×ELBOW90 → 3×ELBOW45"
-  const tbody = document.getElementById('vyd-lines-tbody');
-  const row = tbody.querySelectorAll('tr')[lineIdx];
-  if (row) {
-    row.style.background = '#f0fdf4';
-    row.cells[0].innerHTML +=
-      '<br><span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:3px;font-weight:700">' +
-      '✂️ ' + count90 + '×ELBOW90 → ' + needed45 + '×ELBOW45</span>';
+  const row90 = tbody.querySelectorAll('tr')[lineIdx];
+  if (row90) {
+    row90.style.background = '#f0fdf4';
+    row90.cells[0].innerHTML +=
+      '<br><span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;font-weight:700">' +
+      '✂️ →' + gained45 + '×ELBOW45</span>';
   }
 
-  // 2. Sklad: extra ELBOW45 (gained - použité na izometriu) → pridaj do skladu
-  const e45idx = items.findIndex(it2 =>
-    classifySkladTyp(it2.typ) === 'ELBOW45' && (it2.rozmer||'') === rozmerNorm
-  );
-
+  // 3. Sklad: extra ELBOW45 → pridaj/vytvor
   if (extra45 > 0) {
     if (e45idx >= 0) {
-      items[e45idx].zostatok = (parseFloat(items[e45idx].zostatok)||0) + extra45;
+      // Odpočítaj vydané, pripočítaj extra
+      items[e45idx].zostatok = Math.max(0,
+        (parseFloat(items[e45idx].zostatok)||0) - use45fromStock + extra45
+      );
     } else {
       items.push({
         typ: (it.typ||'').replace(/90/gi,'45').replace(/90°/gi,'45°'),
@@ -1726,6 +1743,11 @@ function applyRezany(idx, onSklad45, needed45) {
         datum: new Date().toISOString().split('T')[0]
       });
     }
+  } else if (e45idx >= 0 && use45fromStock > 0) {
+    // Len odpočítaj vydané zo skladu
+    items[e45idx].zostatok = Math.max(0,
+      (parseFloat(items[e45idx].zostatok)||0) - use45fromStock
+    );
   }
 
   save();
@@ -1733,9 +1755,10 @@ function applyRezany(idx, onSklad45, needed45) {
   renderVydMatList();
 
   alert(
-    '✅ ' + count90 + '× ELBOW90 rozrezaných → ' + gained45 + '× ELBOW45\n' +
-    'Použité na izometriu: ' + needed45 + '× ELBOW45\n' +
-    (extra45 > 0 ? 'Extra do skladu: +' + extra45 + '× ELBOW45' : 'Žiadny zvyšok')
+    '✅ Hotovo!\n' +
+    (use45fromStock > 0 ? '• Vydané zo skladu: ' + use45fromStock + '× ELBOW45\n' : '') +
+    '• Rozrezané: ' + count90 + '× ELBOW90 → ' + gained45 + '× ELBOW45\n' +
+    (extra45 > 0 ? '• Extra do skladu: +' + extra45 + '× ELBOW45' : '')
   );
 }
 // Pridanie bez otázok (priamo)
@@ -1817,10 +1840,26 @@ function buildVydRow(i, l) {
   const tr = document.createElement('tr');
   tr.dataset.idx = i;
 
+  // Stav riadku - zelený ak vydané/rozrezané, normálny ak nie
+  const isRezany = !!(l.rezanyNa);
+  const qty = parseFloat(l.vydQty)||0;
+  const dlzkam = (parseFloat(l.dlzka)||0)/1000;
+  const isOK = isRezany || (l.isPipe ? dlzkam > 0 : qty > 0);
+
+  if (isOK) tr.style.background = '#f0fdf4';
+
+  // Stav badge
+  let stavBadge = '';
+  if (isRezany) {
+    stavBadge = `<br><span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;font-weight:700">✂️ →${l.rezanyNa}</span>`;
+  } else if (isOK) {
+    stavBadge = `<br><span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px">✅</span>`;
+  }
+
   const badge = `<span class="badge badge-${typClass(l.typ)}">${shortType(l.typ)}</span>`;
 
   let html = `
-    <td>${badge}<br><span style="font-size:10px;color:#555;word-break:break-word;max-width:130px;display:inline-block">${l.typ}</span></td>
+    <td>${badge}${stavBadge}<br><span style="font-size:10px;color:#555;word-break:break-word;max-width:130px;display:inline-block">${l.typ}</span></td>
     <td style="font-family:monospace;font-weight:700">${l.rozmer}</td>
     <td style="font-family:monospace;font-size:11px">${l.material||'—'}</td>
     <td style="font-family:monospace;font-size:11px">${l.tavba||'—'}</td>
@@ -1876,7 +1915,24 @@ function updateRowColor(i) {
   const tr = document.querySelector(`#vyd-lines-tbody tr[data-idx="${i}"]`);
   if (!tr) return;
   const qty = parseFloat(l.vydQty) || 0;
-  tr.style.background = qty > l.stockMax ? '#fff5f5' : '';
+  const dlzkam = (parseFloat(l.dlzka)||0)/1000;
+  const isOK = l.rezanyNa || (l.isPipe ? dlzkam > 0 : qty > 0);
+  const isOver = qty > l.stockMax;
+  tr.style.background = isOver ? '#fff5f5' : isOK ? '#f0fdf4' : '';
+  // Obnov stavový badge
+  const stavCell = tr.cells[0];
+  if (stavCell) {
+    // Odstráň starý stav badge
+    const oldBadge = stavCell.querySelector('.stav-badge');
+    if (oldBadge) oldBadge.remove();
+    if (isOK && !l.rezanyNa) {
+      const span = document.createElement('span');
+      span.className = 'stav-badge';
+      span.style.cssText = 'font-size:10px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;display:inline-block;margin-left:2px';
+      span.textContent = '✅';
+      stavCell.insertBefore(span, stavCell.querySelector('span:last-child'));
+    }
+  }
 }
 
 function updateHasPipeCols() {
