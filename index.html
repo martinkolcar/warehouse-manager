@@ -1991,6 +1991,16 @@ function odcitajSklad() {
 
     if (extra45 <= 0) return;
 
+    // Ulož extra45 do vydajky line pre prípad mazania
+    grp.it90.extra45Saved = extra45;
+    // Aktualizuj aj v vydLines (pre buildVydajkaObj)
+    vydLines.forEach(l => {
+      if (classifySkladTyp(l.typ) === 'ELBOW90' &&
+          (l.rozmer||'').replace(/mm$/i,'').trim() === roz) {
+        l.extra45Saved = extra45;
+      }
+    });
+
     // Nájdi ELBOW45 v sklade alebo vytvor
     const ref = grp.it90;
     const e45idx = items.findIndex(it2 =>
@@ -2196,7 +2206,9 @@ function buildVydajkaObj(datum) {
       norma: l.norma, tavba: l.tavba, jednotka: l.jednotka,
       isPipe: l.isPipe || false,
       vydQty: l.isPipe ? Math.round((parseFloat(l.dlzka)||0)/1000*10000)/10000 : (parseFloat(l.vydQty)||0),
-      dlzka: l.dlzka||'', spCislo: l.spCislo||''
+      dlzka: l.dlzka||'', spCislo: l.spCislo||'',
+      extra45Saved: l.extra45Saved||0,
+      rezanyNa: l.rezanyNa||null
     }))
   };
 }
@@ -2836,37 +2848,46 @@ function deleteVydajka(idx) {
     }
   });
 
-  // Ak boli ELBOW90 rezané → odčítaj extra ELBOW45 ktoré pribudli do skladu
+  // Ak boli ELBOW90 rezané → odčítaj extra ELBOW45 ktoré pribudli
+  // extra = qty90 × 2 - qty45_vydane_priamo (bez MTO - vieme to z vydajky)
   const rozmerGroups = {};
   (v.lines||[]).forEach(l => {
     const wt = classifySkladTyp(l.typ);
     if (wt !== 'ELBOW90' && wt !== 'ELBOW45') return;
     const roz = (l.rozmer||'').replace(/mm$/i,'').trim();
-    if (!rozmerGroups[roz]) rozmerGroups[roz] = {qty90:0, qty45:0};
-    if (wt === 'ELBOW90') rozmerGroups[roz].qty90 += parseFloat(l.vydQty)||0;
+    if (!rozmerGroups[roz]) rozmerGroups[roz] = {qty90:0, qty45:0, ref:null};
+    if (wt === 'ELBOW90') { rozmerGroups[roz].qty90 += parseFloat(l.vydQty)||0; rozmerGroups[roz].ref = l; }
     if (wt === 'ELBOW45') rozmerGroups[roz].qty45 += parseFloat(l.vydQty)||0;
   });
 
   Object.keys(rozmerGroups).forEach(roz => {
     const grp = rozmerGroups[roz];
     if (grp.qty90 <= 0) return;
+    // Extra ELBOW45 ktoré pribudli = qty90×2 - qty45 vydané priamo
+    // (qty45 vydané priamo sú tie čo šli NA izometriu zo skladu - tie sa už vrátili vyššie)
+    // Extra = koľko vzniklo z rezania mínus koľko sa použilo na izometriu zo rezania
+    // Ale bez MTO nevieme koľko bolo potreba - vieme len koľko vzniklo z rezania
+    // A koľko sme vydali priamo. Čo ostalo = gained - (needed - qty45)
+    // Keďže gained + qty45 = total pokryté, a extra = total - needed
+    // Najjednoduchšie: uložíme extra do vydajky pri ukladaní
+    // Teraz: extra = gained45 - (qty45 bolo vydané na izometriu zo rezania)
+    // qty45 vydané priamo zo skladu sa vrátili, takže treba odčítať len extra z rezania
     const gained45 = grp.qty90 * 2;
-    const mtoItems = getMTOForIso(v.iso) || [];
-    let needed45 = mtoItems.filter(m =>
-      (m.weldType||'').toUpperCase() === 'ELBOW45' && (m.popis||'').includes(roz)
-    ).reduce((s,m) => s + (parseFloat(m.mn)||1), 0);
-    if (needed45 <= 0) return;
-    const extra45 = Math.max(0, Math.round((gained45 + grp.qty45 - needed45) * 10000) / 10000);
-    if (extra45 <= 0) return;
-    // Odčítaj extra ELBOW45 zo skladu
-    const e45idx = items.findIndex(it2 =>
-      classifySkladTyp(it2.typ) === 'ELBOW45' &&
-      (it2.rozmer||'').replace(/mm$/i,'').trim() === roz
-    );
-    if (e45idx >= 0) {
-      items[e45idx].zostatok = Math.max(0,
-        Math.round(((parseFloat(items[e45idx].zostatok)||0) - extra45) * 10000) / 10000
+    // Extra = gained - (gained + qty45_priamo - qty45_priamo) ... 
+    // Jednoducho: extra = gained45 - potreba_z_rezania
+    // Ale potreba_z_rezania = gained45 - extra = ?
+    // RIEŠENIE: uložíme extra45 do vydajky pri save a tu ho použijeme
+    const savedExtra = grp.ref && grp.ref.extra45Saved;
+    if (savedExtra > 0) {
+      const e45idx = items.findIndex(it2 =>
+        classifySkladTyp(it2.typ) === 'ELBOW45' &&
+        (it2.rozmer||'').replace(/mm$/i,'').trim() === roz
       );
+      if (e45idx >= 0) {
+        items[e45idx].zostatok = Math.max(0,
+          Math.round(((parseFloat(items[e45idx].zostatok)||0) - savedExtra) * 10000) / 10000
+        );
+      }
     }
   });
 
