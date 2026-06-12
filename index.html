@@ -2283,19 +2283,30 @@ function openCoMozeme() {
     const available = [];
     const missing = [];
 
+    // Najprv zoskup MTO položky podľa weldType+DN — sčítaj mn
+    var mtoGrouped = {};
     mtoItems.forEach(function(m) {
       var dims = extractDimsFromPopis(m.popis);
       var mat = extractMaterialFromPopis(m.popis);
       var dnW = getWeldableDN(m.dn);
+      var key = m.weldType + '||' + dnW;
+      var mnNum = parseFloat((m.mn||'0').toString().replace(',','.')) || 0;
+      if (!mtoGrouped[key]) {
+        mtoGrouped[key] = { weldType: m.weldType, dn: dnW, dims: dims.size||dnW, mat: mat, mn: 0, popis: m.popis.substring(0,60) };
+      }
+      mtoGrouped[key].mn += mnNum;
+    });
 
-      // Hľadaj v sklade - porovnaj podľa rozmeru a materiálu
+    Object.values(mtoGrouped).forEach(function(m) {
+      var jednotka = m.weldType === 'PIPE' ? 'm' : 'ks';
+
+      // Hľadaj v sklade
       var found = items.filter(function(it) {
         if (parseFloat(it.zostatok) <= 0) return false;
         var itRoz = (it.rozmer||'').toLowerCase().replace(/\s/g,'');
-        var mRoz = (dims.size||dnW||'').toLowerCase().replace(/\s/g,'');
+        var mRoz = (m.dims||m.dn||'').toLowerCase().replace(/\s/g,'');
         var itMat = (it.material||'').toLowerCase();
-        var mMat = (mat||'').toLowerCase();
-        // Rozmer match (aspoň prvé číslo)
+        var mMat = (m.mat||'').toLowerCase();
         var rozMatch = itRoz.includes(mRoz) || mRoz.includes(itRoz) ||
                        itRoz.split('x')[0] === mRoz.split('x')[0];
         var matMatch = !mMat || itMat.includes(mMat) || mMat.includes(itMat);
@@ -2306,21 +2317,15 @@ function openCoMozeme() {
         return s + (parseFloat(it.zostatok)||0);
       }, 0);
 
-      // Potrebné množstvo z MTO — parsuj číslo
-      var mnNum = parseFloat((m.mn||'0').toString().replace(',','.')) || 0;
-      // Jednotka — PIPE = m, ostatné = ks
-      var jednotka = m.weldType === 'PIPE' ? 'm' : 'ks';
-      // Dostatok? Porovnaj stock vs potrebné
-      var maDostatok = totalStock >= mnNum && mnNum > 0;
+      var maDostatok = totalStock >= m.mn && m.mn > 0;
 
       var entry = {
         weldType: m.weldType,
-        dn: dnW,
-        dims: dims.size||dnW,
-        mat: mat,
-        popis: m.popis.substring(0,60),
-        poz: m.poz,
-        mn: mnNum,
+        dn: m.dn,
+        dims: m.dims,
+        mat: m.mat,
+        popis: m.popis,
+        mn: m.mn,
         jednotka: jednotka,
         stock: totalStock,
         stockItems: found.length,
