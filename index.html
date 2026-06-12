@@ -1610,162 +1610,26 @@ function addMTOToVydajka(mtoIdx) {
 }
 
 // ─── PRIDAŤ DO VÝDAJKY ────────────────────────
-// ─── ROZREZANIE ELBOW90 → ELBOW45 ──────────────
-// 1x ELBOW90 = 2x ELBOW45
-function showRezanyDialog(idx, it) {
-  const mtoItems = getMTOForIso(vydIso);
-  const rozmerNorm = (it.rozmer||'').replace(/mm$/i,'').trim();
 
-  // Koľko ELBOW45 MTO potrebuje
-  const needed45 = mtoItems.filter(m =>
-    (m.weldType||'').toUpperCase() === 'ELBOW45' &&
-    (m.popis||'').includes(rozmerNorm)
-  ).reduce((s,m) => s + (parseFloat(m.mn)||1), 0);
-
-  // Koľko ELBOW45 je na sklade
-  const e45idx = items.findIndex(it2 =>
-    classifySkladTyp(it2.typ) === 'ELBOW45' &&
-    (it2.rozmer||'').replace(/mm$/i,'').trim() === rozmerNorm
-  );
-  const onSklad45 = e45idx >= 0 ? (parseFloat(items[e45idx].zostatok)||0) : 0;
-
-  // Koľko ELBOW45 ešte chýba po zohľadnení skladu
-  const stillNeed45 = Math.max(0, needed45 - onSklad45);
-
-  // Koľko ELBOW90 treba rozrezať (každý dá 2× ELBOW45)
-  const need90 = Math.ceil(stillNeed45 / 2);
-  // Extra ELBOW45 čo zostanú po rozrezaní
-  const extraAfterCut = (need90 * 2) - stillNeed45;
-
-  const overlay = document.createElement('div');
-  overlay.id = 'rezany-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center';
-  overlay.innerHTML = `
-    <div style="background:#fff;border-radius:12px;padding:28px;max-width:440px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
-      <h3 style="margin:0 0 8px;font-size:17px;color:#1a1a2e">✂️ Rozrezať ELBOW90 → 2× ELBOW45</h3>
-      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px;color:#374151">
-        <div>MTO potrebuje: <strong>${needed45} ks ELBOW45</strong></div>
-        <div>Na sklade: <strong>${onSklad45} ks ELBOW45</strong></div>
-        <div style="color:#dc2626">Chýba: <strong>${stillNeed45} ks ELBOW45</strong></div>
-      </div>
-      <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px">
-        Rozrežeš <strong id="rezany-preview">${need90}</strong>× ELBOW90 →
-        získaš <strong>${need90*2}</strong>× ELBOW45<br>
-        <span style="color:#166534">Extra do skladu: <strong>${extraAfterCut}</strong>× ELBOW45</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
-        <label style="font-size:13px;color:#374151;white-space:nowrap">Počet ELBOW90 rozrezať:</label>
-        <input id="rezany-count" type="number" min="1" step="1" value="${need90}"
-          oninput="document.getElementById('rezany-preview').textContent=this.value"
-          style="width:70px;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:15px;font-weight:700;text-align:center">
-        <span style="font-size:12px;color:#666">× 2 = <span id="rezany-result">${need90*2}</span>× ELBOW45</span>
-      </div>
-      <div style="display:flex;gap:10px">
-        <button onclick="applyRezany(${idx},${onSklad45},${needed45})"
-          style="flex:1;background:#16a34a;color:white;border:none;padding:11px;border-radius:8px;cursor:pointer;font-weight:700;font-size:14px">✂️ Potvrdiť</button>
-        <button onclick="document.getElementById('rezany-overlay').remove();addToVydajkaDirect(${idx})"
-          style="flex:1;background:#f0f4ff;color:#4f7cff;border:1px solid #4f7cff;padding:11px;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px">Pridať bez rezania</button>
-        <button onclick="document.getElementById('rezany-overlay').remove()"
-          style="background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0;padding:11px 16px;border-radius:8px;cursor:pointer">Zrušiť</button>
-      </div>
-    </div>`;
-  // Live update výsledku
-  overlay.querySelector('#rezany-count').addEventListener('input', function() {
-    const v = parseInt(this.value)||0;
-    overlay.querySelector('#rezany-result').textContent = v*2;
-  });
-  document.body.appendChild(overlay);
-}
-
-function applyRezany(idx, onSklad45, needed45) {
-  const it = items[idx];
-  const count90 = parseInt(document.getElementById('rezany-count').value)||1;
-  document.getElementById('rezany-overlay').remove();
-
-  const gained45  = count90 * 2;              // 1× ELBOW90 = 2× ELBOW45
-  const use45from90 = gained45;               // koľko ELBOW45 získame z rezania
-  const use45fromStock = Math.min(onSklad45, needed45 - use45from90 > 0 ? needed45 - use45from90 : 0);
-  // Koľko ELBOW45 ostane do skladu (gained - použité na izometriu čo nepokrýva sklad)
-  const totalCovered = use45from90 + use45fromStock;
-  const extra45 = totalCovered - needed45;    // zvyšok ide do skladu
-  const rozmerNorm = (it.rozmer||'');
-  const tbody = document.getElementById('vyd-lines-tbody');
-
-  // 1. Vydaj ELBOW45 zo skladu (ak nejaké sú) → samostatný zelený riadok
-  const e45idx = items.findIndex(it2 =>
-    classifySkladTyp(it2.typ) === 'ELBOW45' && (it2.rozmer||'') === rozmerNorm
-  );
-  if (e45idx >= 0 && use45fromStock > 0) {
-    addToVydajkaDirect(e45idx, use45fromStock);
-    const e45lineIdx = vydLines.length - 1;
-    vydLines[e45lineIdx].vydQty = use45fromStock;
-    const e45row = tbody.querySelectorAll('tr')[e45lineIdx];
-    if (e45row) {
-      e45row.style.background = '#f0fdf4';
-      e45row.cells[0].innerHTML +=
-        '<br><span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;font-weight:700">✅</span>';
-    }
-  }
-
-  // 2. Vydaj ELBOW90 → rozrezať → zelený riadok s nožnicami
-  addToVydajkaDirect(idx, count90);
-  const lineIdx = vydLines.length - 1;
-  vydLines[lineIdx].rezanyZ      = 'ELBOW90';
-  vydLines[lineIdx].rezanyNa     = 'ELBOW45';
-  vydLines[lineIdx].rezanyGained = gained45;
-  vydLines[lineIdx].vydQty       = count90;
-  const row90 = tbody.querySelectorAll('tr')[lineIdx];
-  if (row90) {
-    row90.style.background = '#f0fdf4';
-    row90.cells[0].innerHTML +=
-      '<br><span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;font-weight:700">' +
-      '✂️ →' + gained45 + '×ELBOW45</span>';
-  }
-
-  // 3. Sklad: extra ELBOW45 → pridaj/vytvor
-  if (extra45 > 0) {
-    if (e45idx >= 0) {
-      // Odpočítaj vydané, pripočítaj extra
-      items[e45idx].zostatok = Math.max(0,
-        (parseFloat(items[e45idx].zostatok)||0) - use45fromStock + extra45
-      );
-    } else {
-      items.push({
-        typ: (it.typ||'').replace(/90/gi,'45').replace(/90°/gi,'45°'),
-        rozmer: it.rozmer,
-        material: it.material,
-        norma: (it.norma||'').replace(/90/gi,'45').replace(/90°/gi,'45°'),
-        jednotka: 'ks',
-        zostatok: extra45,
-        tavba: it.tavba||'',
-        poznamka: 'Rozrezané z ELBOW90 ' + new Date().toISOString().split('T')[0],
-        zdroj_dl: 'KONVERZIA',
-        datum: new Date().toISOString().split('T')[0]
-      });
-    }
-  } else if (e45idx >= 0 && use45fromStock > 0) {
-    // Len odpočítaj vydané zo skladu
-    items[e45idx].zostatok = Math.max(0,
-      (parseFloat(items[e45idx].zostatok)||0) - use45fromStock
-    );
-  }
-
-  save();
-  render();
-  renderVydMatList();
-
-  alert(
-    '✅ Hotovo!\n' +
-    (use45fromStock > 0 ? '• Vydané zo skladu: ' + use45fromStock + '× ELBOW45\n' : '') +
-    '• Rozrezané: ' + count90 + '× ELBOW90 → ' + gained45 + '× ELBOW45\n' +
-    (extra45 > 0 ? '• Extra do skladu: +' + extra45 + '× ELBOW45' : '')
-  );
-}
 // Pridanie bez otázok (priamo)
 function addToVydajkaDirect(idx, qty) {
   const it = items[idx];
   if (!it) return;
   const isPipe = (it.typ||'').toLowerCase().includes('pipe');
+
+  // Ak je ELBOW90 a MTO potrebuje ELBOW45 tohto rozmeru → označ ako rezaný
+  const wt = classifySkladTyp(it.typ);
+  let rezanyNa = null;
+  if (wt === 'ELBOW90' && vydIso) {
+    const rozNorm = (it.rozmer||'').replace(/mm$/i,'').trim();
+    const mtoItems = getMTOForIso(vydIso) || [];
+    const needsE45 = mtoItems.some(m =>
+      (m.weldType||'').toUpperCase() === 'ELBOW45' &&
+      (m.popis||'').includes(rozNorm)
+    );
+    if (needsE45) rezanyNa = 'ELBOW45';
+  }
+
   vydLines.push({
     itemIdx: idx,
     typ: it.typ,
@@ -1779,6 +1643,7 @@ function addToVydajkaDirect(idx, qty) {
     dlzka: '',
     spCislo: '',
     isPipe,
+    rezanyNa,
   });
   const panel = document.getElementById('vyd-lines-panel');
   panel.style.display = 'flex';
@@ -1793,22 +1658,7 @@ function addToVydajka(idx) {
   if (!vydIso) { alert('Najprv vyberte izometriu'); return; }
   const isPipe = (it.typ||'').toLowerCase().includes('pipe');
 
-  // Kontrola: ak je to ELBOW90 a MTO potrebuje ELBOW45 → ponúkni rozrezanie
-  if (!isPipe) {
-    const skladTyp = classifySkladTyp(it.typ);
-    if (skladTyp === 'ELBOW90') {
-      const mtoItems = getMTOForIso(vydIso);
-      const rozmerNorm = (it.rozmer||'').replace(/mm$/i,'').trim();
-      const needsElbow45 = mtoItems.some(m =>
-        (m.weldType||'').toUpperCase() === 'ELBOW45' &&
-        (m.popis||'').includes(rozmerNorm)
-      );
-      if (needsElbow45) {
-        showRezanyDialog(idx, it);
-        return;
-      }
-    }
-  }
+
 
   // Ak rovnaký materiál+tavba už je → iba zvýš qty (fittingy), rúry pridaj nový riadok
   if (!isPipe) {
@@ -1840,18 +1690,21 @@ function buildVydRow(i, l) {
   const tr = document.createElement('tr');
   tr.dataset.idx = i;
 
-  // Stav riadku - zelený ak vydané/rozrezané, normálny ak nie
-  const isRezany = !!(l.rezanyNa);
   const qty = parseFloat(l.vydQty)||0;
   const dlzkam = (parseFloat(l.dlzka)||0)/1000;
-  const isOK = isRezany || (l.isPipe ? dlzkam > 0 : qty > 0);
+  const wt = classifySkladTyp(l.typ);
 
+  // Je ELBOW90 ktorý pokrýva ELBOW45 potrebu?
+  const isElbow90 = wt === 'ELBOW90';
+  const isElbow45 = wt === 'ELBOW45';
+
+  const isOK = l.isPipe ? dlzkam > 0 : qty > 0;
   if (isOK) tr.style.background = '#f0fdf4';
 
   // Stav badge
   let stavBadge = '';
-  if (isRezany) {
-    stavBadge = `<br><span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;font-weight:700">✂️ →${l.rezanyNa}</span>`;
+  if (isElbow90 && isOK) {
+    stavBadge = `<br><span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;font-weight:700">✂️ ×${qty*2} ELBOW45</span>`;
   } else if (isOK) {
     stavBadge = `<br><span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px">✅</span>`;
   }
@@ -2049,24 +1902,20 @@ function saveVydajka(mode) {
 }
 
 function odcitajSklad() {
+  // Najprv normálne odpočítaj všetky vydané položky zo skladu
   vydLines.forEach(l => {
     const vydane = l.isPipe ? (parseFloat(l.dlzka)||0)/1000 : (parseFloat(l.vydQty)||0);
     if (vydane <= 0) return;
 
-    // Ak má itemIdx — priamy odkaz do skladu
     if (l.itemIdx !== null && l.itemIdx !== undefined && items[l.itemIdx]) {
       items[l.itemIdx].zostatok = Math.round(((parseFloat(items[l.itemIdx].zostatok)||0) - vydane) * 10000) / 10000;
       return;
     }
 
-    // Pre MTO položky (fromMTO) — nájdi v sklade podľa rozmeru a materiálu
     if (l.fromMTO || l.itemIdx === null) {
       var rozmer = (l.rozmer||'').toLowerCase().replace(/\s/g,'');
       var mat = (l.material||'').toLowerCase();
-
-      // Nájdi najlepší match v sklade s dostatočným zostatkom
-      var best = -1;
-      var bestScore = 0;
+      var best = -1, bestScore = 0;
       items.forEach(function(it, idx) {
         if (parseFloat(it.zostatok) <= 0) return;
         var itRoz = (it.rozmer||'').toLowerCase().replace(/\s/g,'');
@@ -2076,12 +1925,67 @@ function odcitajSklad() {
         var score = (rozMatch ? 2 : 0) + (matMatch ? 1 : 0);
         if (score > bestScore) { bestScore = score; best = idx; }
       });
-
       if (best >= 0 && bestScore >= 2) {
         items[best].zostatok = Math.round(((parseFloat(items[best].zostatok)||0) - vydane) * 10000) / 10000;
-        // Zapamätaj si itemIdx pre budúce referencie
         l.itemIdx = best;
       }
+    }
+  });
+
+  // Teraz pre každý ELBOW90 vo vydajke: pridaj extra ELBOW45 do skladu
+  // Extra = (ELBOW90_qty × 2) - ELBOW45_potreba_z_MTO + ELBOW45_vydane_priamo
+  // Zjednodušene: spočítaj koľko ELBOW45 vzniklo z rezania a koľko bolo potrebných
+  const mtoItems = getMTOForIso(vydIso) || [];
+
+  // Zoskup podľa rozmeru
+  const rozmerGroups = {};
+  vydLines.forEach(l => {
+    const wt = classifySkladTyp(l.typ);
+    if (wt !== 'ELBOW90' && wt !== 'ELBOW45') return;
+    const roz = (l.rozmer||'').replace(/mm$/i,'').trim();
+    if (!rozmerGroups[roz]) rozmerGroups[roz] = { qty90: 0, qty45: 0, typ90: null, it90: null };
+    if (wt === 'ELBOW90') {
+      rozmerGroups[roz].qty90 += parseFloat(l.vydQty)||0;
+      rozmerGroups[roz].typ90 = l.typ;
+      rozmerGroups[roz].it90 = l;
+    }
+    if (wt === 'ELBOW45') rozmerGroups[roz].qty45 += parseFloat(l.vydQty)||0;
+  });
+
+  Object.keys(rozmerGroups).forEach(roz => {
+    const grp = rozmerGroups[roz];
+    if (grp.qty90 <= 0) return;
+
+    // Koľko ELBOW45 získame z rezania
+    const gained45 = grp.qty90 * 2;
+    // Koľko ELBOW45 bolo potrebných z MTO pre tento rozmer
+    const needed45 = mtoItems.filter(m =>
+      (m.weldType||'').toUpperCase() === 'ELBOW45' &&
+      (m.popis||'').includes(roz)
+    ).reduce((s,m) => s + (parseFloat(m.mn)||1), 0);
+
+    // Extra = gained + vydané priamo - potreba
+    const extra45 = Math.round((gained45 + grp.qty45 - needed45) * 10000) / 10000;
+
+    if (extra45 <= 0) return;
+
+    // Nájdi ELBOW45 v sklade alebo vytvor
+    const ref = grp.it90;
+    const e45idx = items.findIndex(it2 =>
+      classifySkladTyp(it2.typ) === 'ELBOW45' &&
+      (it2.rozmer||'').replace(/mm$/i,'').trim() === roz
+    );
+    if (e45idx >= 0) {
+      items[e45idx].zostatok = Math.round(((parseFloat(items[e45idx].zostatok)||0) + extra45) * 10000) / 10000;
+    } else if (ref) {
+      items.push({
+        typ: (ref.typ||'').replace(/90/gi,'45').replace(/90°/gi,'45°'),
+        rozmer: ref.rozmer, material: ref.material,
+        norma: (ref.norma||'').replace(/90/gi,'45').replace(/90°/gi,'45°'),
+        jednotka: 'ks', zostatok: extra45, tavba: ref.tavba||'',
+        poznamka: 'Z rezania ELBOW90 ' + new Date().toISOString().split('T')[0],
+        zdroj_dl: 'KONVERZIA', datum: new Date().toISOString().split('T')[0]
+      });
     }
   });
 }
