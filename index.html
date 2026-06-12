@@ -432,6 +432,7 @@ let items = [];
 let editIdx = null;
 let previewItems = [];
 let vydajkyList = [];
+let vydVynimkaMode = false; // Výnimka - zobraz celý sklad
 
 function setSyncStatus(msg, color) {
   const el = document.getElementById('sync-status');
@@ -1341,6 +1342,7 @@ function selectVydIso(iso, sec) {
 }
 
 function selectVydIsoSilent(iso, sec) {
+  vydVynimkaMode = false;
   // Skry bočný panel
   document.getElementById('vyd-iso-panel').style.display = 'none';
 
@@ -1458,8 +1460,31 @@ function renderVydMatList() {
   }
 
   // ── Sklad sekcia ──
-  const avail   = items.filter(it => parseFloat(it.zostatok) > 0);
-  const filtered = avail.filter(it =>
+  const avail = items.filter(it => parseFloat(it.zostatok) > 0);
+
+  // MTO kľúče pre filter (typ+rozmer)
+  const mtoKeys = new Set();
+  mtoItems.forEach(function(m) {
+    if (!ZVARACIE_TYPY.includes((m.weldType||'').toUpperCase())) return;
+    var rozmerKey = (m.popis||'').match(/(\d+\.?\d*x\d+\.?\d*mm?)/i);
+    var rozmer = rozmerKey ? rozmerKey[1] : ('DN'+(m.dn||''));
+    mtoKeys.add((m.weldType||'').toUpperCase() + '|' + rozmer);
+    // Pridaj aj varianty (s mm / bez mm)
+    mtoKeys.add((m.weldType||'').toUpperCase() + '|' + rozmer.replace('mm',''));
+  });
+
+  // Filter sklad podľa MTO (ak nie je výnimka)
+  const hasMTO = mtoItems.length > 0;
+  const availFiltered = hasMTO && !vydVynimkaMode
+    ? avail.filter(it => {
+        if (!ZVARACIE_TYPY.includes((it.typ||'').toUpperCase())) return true; // nekontroluj niezvaracie
+        const k1 = (it.typ||'').toUpperCase() + '|' + (it.rozmer||'');
+        const k2 = (it.typ||'').toUpperCase() + '|' + (it.rozmer||'').replace('mm','');
+        return mtoKeys.has(k1) || mtoKeys.has(k2);
+      })
+    : avail;
+
+  const filtered = availFiltered.filter(it =>
     (!fTyp    || it.typ === fTyp) &&
     (!fRozmer || it.rozmer === fRozmer) &&
     (!fMat    || (it.material||'') === fMat)
@@ -1467,7 +1492,7 @@ function renderVydMatList() {
 
   // Naplň selecty (kaskádovo)
   const curR = fRozmer, curM = fMat;
-  const baseForR = avail.filter(it => !fTyp || it.typ === fTyp);
+  const baseForR = availFiltered.filter(it => !fTyp || it.typ === fTyp);
   const baseForM = baseForR.filter(it => !fRozmer || it.rozmer === fRozmer);
   const rozmery = [...new Set(baseForR.map(it=>it.rozmer).filter(Boolean))].sort();
   const maty    = [...new Set(baseForM.map(it=>it.material).filter(Boolean))].sort();
@@ -1478,19 +1503,33 @@ function renderVydMatList() {
     '<option value="">— všetky —</option>' +
     maty.map(v=>`<option value="${v}"${v===curM?' selected':''}>${v}</option>`).join('');
 
-  document.getElementById('vf-count').textContent = `${filtered.length} položiek`;
+  const skippedCount = avail.length - availFiltered.length;
+
+  // Tlačidlo výnimka
+  const vynimkaBtn = hasMTO
+    ? `<button onclick="vydVynimkaMode=!vydVynimkaMode;renderVydMatList()" style="
+        padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer;font-weight:700;
+        background:${vydVynimkaMode?'#f59e0b':'#f0f4ff'};
+        color:${vydVynimkaMode?'white':'#4f7cff'};
+        border:1px solid ${vydVynimkaMode?'#f59e0b':'#4f7cff'}">
+        🔓 Výnimka${vydVynimkaMode?' (aktívna)':skippedCount?' (+'+skippedCount+' skrytých)':''}</button>`
+    : '';
+
+  document.getElementById('vf-count').textContent = filtered.length + ' položiek';
 
   if (filtered.length > 0) {
-    html += '<div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:6px;padding-left:2px">🏭 SKLAD</div>';
+    html += `<div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:6px;padding-left:2px;display:flex;align-items:center;gap:8px">🏭 SKLAD ${vynimkaBtn}</div>`;
     html += filtered.map(it => {
       const realIdx = items.indexOf(it);
       const q = parseFloat(it.zostatok)||0;
       const qClass = q<=0?'qty-zero':q<3?'qty-low':'qty-ok';
       const qStr = it.jednotka==='m'?q.toFixed(2)+' m':q+' ks';
-      return `<div class="vyd-mat-row" onclick="addToVydajka(${realIdx})">
+      const isVynimka = hasMTO && !mtoKeys.has((it.typ||'').toUpperCase()+'|'+(it.rozmer||'')) && !mtoKeys.has((it.typ||'').toUpperCase()+'|'+(it.rozmer||'').replace('mm',''));
+      return `<div class="vyd-mat-row" onclick="addToVydajka(${realIdx})" style="${isVynimka?'border-left:3px solid #f59e0b;':''}">
         <div class="mat-info">
           <div><span class="badge badge-${typClass(it.typ)}">${shortType(it.typ)}</span>
-            <span class="mat-rozmer" style="margin-left:6px">${it.rozmer}</span></div>
+            <span class="mat-rozmer" style="margin-left:6px">${it.rozmer}</span>
+            ${isVynimka?'<span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;margin-left:4px">výnimka</span>':''}</div>
           <div class="mat-typ">${it.typ}</div>
           <div class="mat-tavba">Tavba: <strong>${it.tavba||'—'}</strong> &nbsp;|&nbsp; ${it.material||''} &nbsp;|&nbsp; <span style="color:#aaa">${it.norma||''}</span></div>
         </div>
@@ -1501,7 +1540,9 @@ function renderVydMatList() {
       </div>`;
     }).join('');
   } else if (!mtoItems.length) {
-    html += '<div style="text-align:center;padding:30px;color:#aaa;font-size:12px">Žiadne položky</div>';
+    html += '<div style="text-align:center;padding:30px;color:#aaa;font-size:12px">Žiadne položky na sklade</div>';
+  } else {
+    html += `<div style="text-align:center;padding:20px;color:#aaa;font-size:12px">Žiadne položky zo skladu zodpovedajú MTO<br>${vynimkaBtn}</div>`;
   }
 
   el.innerHTML = html;
@@ -1700,6 +1741,7 @@ function clearVydLines() {
   if (!vydLines.length) return;
   if (!confirm('Vymazať všetky riadky?')) return;
   vydLines = [];
+  vydVynimkaMode = false;
   document.getElementById('vyd-lines-tbody').innerHTML = '';
   document.getElementById('vyd-lines-panel').style.display = 'none';
   updateVydCount();
@@ -2501,11 +2543,19 @@ function renderZoznam() {
       : [];
 
     // Vydané položky (zvaracie) z vydajok tejto izometrie
-    const vydaneMap = {}; // "TYP|rozmer" → vydQty
+    const vydaneMap = {}; // "TYP|rozmer" → vydané množstvo (m pre pipe, ks pre ostatné)
     lines.forEach(l => {
       if (!ZVARACIE_TYPY.includes((l.typ||'').toUpperCase())) return;
       const k = (l.typ||'').toUpperCase() + '|' + (l.rozmer||'');
-      vydaneMap[k] = (vydaneMap[k]||0) + (parseFloat(l.vydQty)||1);
+      let qty;
+      if (l.isPipe) {
+        // PIPE: dlzka je v mm → preveď na m
+        qty = (parseFloat(l.dlzka)||0) / 1000;
+        if (qty === 0) qty = parseFloat(l.vydQty)||0; // fallback
+      } else {
+        qty = parseFloat(l.vydQty)||1;
+      }
+      vydaneMap[k] = (vydaneMap[k]||0) + qty;
     });
 
     // Vypočítaj chýba
@@ -2514,7 +2564,9 @@ function renderZoznam() {
       const rozmerKey = (m.popis||'').match(/(\d+\.?\d*x\d+\.?\d*mm?(?:\s*\/\s*\d+\.?\d*x\d+\.?\d*mm?)?)/i);
       const rozmer = rozmerKey ? rozmerKey[1] : ('DN'+(m.dn||''));
       const k = (m.weldType||'').toUpperCase() + '|' + rozmer;
-      mtoMap[k] = (mtoMap[k]||0) + (parseFloat(m.mn)||1);
+      // MTO mn: "3.5 M" → 3.5, "2" → 2
+      const mnVal = parseFloat((m.mn||'').toString().replace(/[mM\s]/g,''))||1;
+      mtoMap[k] = (mtoMap[k]||0) + mnVal;
     });
 
     let chybaPocet = 0;
