@@ -1164,6 +1164,7 @@ function uploadMTOExcel() {
 function classifyWeldType(popis) {
   var p = popis.toUpperCase();
   if (p.includes('RÚRA') || p.includes('RURA')) return 'PIPE';
+  if ((p.includes('OBLÚK') || p.includes('OBLUK') || p.includes('KOLENO')) && p.includes('45')) return 'ELBOW45';
   if (p.includes('OBLÚK') || p.includes('OBLUK') || p.includes('KOLENO')) return 'ELBOW';
   if (p.includes('T-KUS') || p.includes('TKUS')) return 'TEE';
   if (p.includes('ODBOČKA')) return 'BRANCH';
@@ -1973,6 +1974,7 @@ async function clearHeatyZWeldBooku(vydajka) {
 function wbShortType(typ) {
   var t = (typ||'').toUpperCase();
   if (t.includes('PIPE') || t.includes('RÚRA') || t.includes('RURA')) return 'PIPE';
+  if (t.includes('45') && (t.includes('ELBOW') || t.includes('OBLÚK') || t.includes('OBLUK'))) return 'ELBOW45';
   if (t.includes('ELBOW') || t.includes('OBLÚK') || t.includes('OBLUK') || t.includes('KOLENO')) return 'ELBOW';
   if (t.includes('T-PIECE') || t.includes('TEE') || t.includes('T-KUS')) return 'TEE';
   if (t.includes('REDUCER') || t.includes('REDUKCI')) return 'REDUCER';
@@ -2270,7 +2272,7 @@ function openCoMozeme() {
     return;
   }
 
-  const WELD_TYPES_SET = new Set(['PIPE','ELBOW','FLANGE','TEE','REDUCER','CAP','BRANCH','VALVE']);
+  const WELD_TYPES_SET = new Set(['PIPE','ELBOW','ELBOW45','FLANGE','TEE','REDUCER','CAP','BRANCH','VALVE']);
 
   // Pre každú izometriu z MTO skontroluj čo je v sklade
   const results = [];
@@ -2312,6 +2314,7 @@ function openCoMozeme() {
         if (!isPipeMTO) {
           var itWbTyp = wbShortType(it.typ);
           if (itWbTyp && itWbTyp !== m.weldType) return false;
+          // Ak wbShortType vráti null (neznámy typ) — nevylučuj, nech rozmer rozhodne
         }
         var itRoz = (it.rozmer||'').toLowerCase().replace(/\s/g,'');
         var mRoz = (m.dims||'').toLowerCase().replace(/\s/g,'');
