@@ -1608,10 +1608,153 @@ function addMTOToVydajka(mtoIdx) {
 }
 
 // ─── PRIDAŤ DO VÝDAJKY ────────────────────────
+// ─── ROZREZANIE ELBOW90 → ELBOW45 ──────────────
+function showRezanyDialog(idx, it) {
+  // Zisti koľko ELBOW45 MTO potrebuje pre túto izometriu
+  const mtoItems = getMTOForIso(vydIso);
+  const rozmerNorm = (it.rozmer||'').replace(/mm$/i,'').trim();
+  const needed = mtoItems.filter(m =>
+    (m.weldType||'').toUpperCase() === 'ELBOW45' &&
+    (m.popis||'').includes(rozmerNorm)
+  ).reduce((s,m) => s + (parseFloat(m.mn)||1), 0);
+
+  // Koľko ELBOW45 už je vo vydajke
+  const alreadyLine = vydLines.find(l => l.rezanyZ && classifySkladTyp(l.typ) === 'ELBOW45' &&
+    (l.rozmer||'').replace(/mm$/i,'') === rozmerNorm);
+  const alreadyQty = alreadyLine ? (parseFloat(alreadyLine.vydQty)||0) : 0;
+  const stillNeed = Math.max(0, needed - alreadyQty);
+
+  // Zobraz modal
+  const overlay = document.createElement('div');
+  overlay.id = 'rezany-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:28px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+      <h3 style="margin:0 0 8px;font-size:17px;color:#1a1a2e">✂️ Rozrezať ELBOW90 na ELBOW45?</h3>
+      <p style="color:#64748b;margin:0 0 16px;font-size:13px">
+        <strong>${it.typ}</strong> ${it.rozmer}<br>
+        MTO potrebuje: <strong>${needed} ks ELBOW45</strong>${stillNeed>0?' (zostatok: '+stillNeed+' ks)':''}
+      </p>
+      <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px">
+        Zo skladu vydáš <strong>ELBOW90</strong> → v sklade pribudnú <strong>ELBOW45</strong> (rovnaký rozmer, materiál, norma).<br>
+        Vo výdajke sa bude počítať ako <strong style="color:#166534">ELBOW45 ✔</strong>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+        <label style="font-size:13px;color:#374151">Počet ELBOW90 na rozrezanie:</label>
+        <input id="rezany-count" type="number" min="1" step="1" value="${stillNeed||1}"
+          style="width:70px;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:15px;font-weight:700;text-align:center">
+      </div>
+      <div style="display:flex;gap:10px">
+        <button onclick="applyRezany(${idx})" style="flex:1;background:#16a34a;color:white;border:none;padding:11px;border-radius:8px;cursor:pointer;font-weight:700;font-size:14px">✂️ Rozrezať</button>
+        <button onclick="document.getElementById('rezany-overlay').remove();addToVydajkaDirect(${idx})"
+          style="flex:1;background:#f0f4ff;color:#4f7cff;border:1px solid #4f7cff;padding:11px;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px">Pridať bez rozrezania</button>
+        <button onclick="document.getElementById('rezany-overlay').remove()"
+          style="background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0;padding:11px 16px;border-radius:8px;cursor:pointer">Zrušiť</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function applyRezany(idx) {
+  const it = items[idx];
+  const count = parseInt(document.getElementById('rezany-count').value)||1;
+  document.getElementById('rezany-overlay').remove();
+
+  // 1. Pridaj ELBOW90 do vydajky normálne (vydá sa zo skladu)
+  addToVydajkaDirect(idx, count);
+
+  // 2. Vo vydajke označ posledný riadok ako "rezany"
+  const lastIdx = vydLines.length - 1;
+  vydLines[lastIdx].rezanyZ = 'ELBOW90';
+  vydLines[lastIdx].rezanyNa = 'ELBOW45';
+  vydLines[lastIdx].vydQty = count;
+
+  // 3. Prepiš zobrazenie v tabuľke - zelený štítok
+  const tbody = document.getElementById('vyd-lines-tbody');
+  const rows = tbody.querySelectorAll('tr');
+  if (rows[lastIdx]) {
+    const badgeCell = rows[lastIdx].cells[0];
+    if (badgeCell) {
+      badgeCell.innerHTML += '<br><span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:3px;font-weight:700">✂️ →ELBOW45</span>';
+    }
+  }
+
+  // 4. V sklade: -count ELBOW90, +count ELBOW45
+  // Nájdi alebo vytvor ELBOW45 v items
+  const rozmerNorm = (it.rozmer||'');
+  const elbow45Idx = items.findIndex(it2 =>
+    classifySkladTyp(it2.typ) === 'ELBOW45' &&
+    (it2.rozmer||'') === rozmerNorm
+  );
+  if (elbow45Idx >= 0) {
+    items[elbow45Idx].zostatok = (parseFloat(items[elbow45Idx].zostatok)||0) + count;
+  } else {
+    // Vytvor novú položku ELBOW45
+    items.push({
+      typ: (it.typ||'').replace(/90/g,'45').replace(/90°/g,'45°'),
+      rozmer: it.rozmer,
+      material: it.material,
+      norma: (it.norma||'').replace(/90/g,'45').replace(/90°/g,'45°'),
+      jednotka: 'ks',
+      zostatok: count,
+      tavba: it.tavba||'',
+      poznamka: 'Rozrezané z ELBOW90 ' + new Date().toISOString().split('T')[0],
+      zdroj_dl: 'KONVERZIA',
+      datum: new Date().toISOString().split('T')[0]
+    });
+  }
+  save();
+  render();
+
+  alert('✅ ' + count + '× ELBOW90 → ELBOW45\nPribudlo ' + count + '× ELBOW45 v sklade.');
+  renderVydMatList();
+}
+
+// Pridanie bez otázok (priamo)
+function addToVydajkaDirect(idx, qty) {
+  const it = items[idx];
+  if (!it) return;
+  const isPipe = (it.typ||'').toLowerCase().includes('pipe');
+  vydLines.push({
+    itemIdx: idx,
+    typ: it.typ,
+    rozmer: it.rozmer,
+    material: it.material,
+    norma: it.norma,
+    tavba: it.tavba,
+    jednotka: it.jednotka,
+    stockMax: parseFloat(it.zostatok)||0,
+    vydQty: qty || (isPipe ? 0 : 1),
+    dlzka: '',
+    spCislo: '',
+    isPipe,
+  });
+  const panel = document.getElementById('vyd-lines-panel');
+  panel.style.display = 'flex';
+  panel.style.flexDirection = 'column';
+  appendVydRow(vydLines.length - 1);
+  updateVydCount();
+  updateHasPipeCols();
+}
+
 function addToVydajka(idx) {
   const it = items[idx];
   if (!vydIso) { alert('Najprv vyberte izometriu'); return; }
   const isPipe = (it.typ||'').toLowerCase().includes('pipe');
+
+  // Kontrola: ak je to ELBOW90 a MTO potrebuje ELBOW45 → ponúkni rozrezanie
+  if (vydVynimkaMode && !isPipe) {
+    const skladTyp = classifySkladTyp(it.typ);
+    if (skladTyp === 'ELBOW90' || skladTyp === 'ELBOW') {
+      const mtoItems = getMTOForIso(vydIso);
+      const needsElbow45 = mtoItems.some(m => (m.weldType||'').toUpperCase() === 'ELBOW45' &&
+        (m.popis||'').includes((it.rozmer||'').replace(/mm$/i,'')));
+      if (needsElbow45) {
+        showRezanyDialog(idx, it);
+        return;
+      }
+    }
+  }
 
   // Ak rovnaký materiál+tavba už je → iba zvýš qty (fittingy), rúry pridaj nový riadok
   if (!isPipe) {
@@ -1626,28 +1769,7 @@ function addToVydajka(idx) {
     }
   }
 
-  vydLines.push({
-    itemIdx: idx,
-    typ: it.typ,
-    rozmer: it.rozmer,
-    material: it.material,
-    norma: it.norma,
-    tavba: it.tavba,
-    jednotka: it.jednotka,
-    stockMax: parseFloat(it.zostatok)||0,
-    vydQty: isPipe ? 0 : 1,
-    dlzka: '',
-    spCislo: '',
-    isPipe,
-  });
-
-  const panel = document.getElementById('vyd-lines-panel');
-  panel.style.display = 'flex';
-  panel.style.flexDirection = 'column';
-  // Pridaj iba nový riadok — neprekresluj celý tbody
-  appendVydRow(vydLines.length - 1);
-  updateVydCount();
-  updateHasPipeCols();
+  addToVydajkaDirect(idx);
 }
 
 // Pridá jeden riadok do tabuľky bez rekreovania ostatných
@@ -2573,8 +2695,13 @@ function renderZoznam() {
     const vydaneMap = {};
     lines.forEach(l => {
       if (!ZVARACIE_TYPY.includes((l.typ||'').toUpperCase())) return;
-      // Klasifikuj typ vydajky na weldType pre zhodu s mtoMap
-      const wt = classifySkladTyp(l.typ) || (l.typ||'').toUpperCase();
+      // Ak je rozrezaný (napr. ELBOW90→ELBOW45), počítaj ako cieľový typ
+      let wt;
+      if (l.rezanyNa) {
+        wt = l.rezanyNa.toUpperCase(); // napr. ELBOW45
+      } else {
+        wt = classifySkladTyp(l.typ) || (l.typ||'').toUpperCase();
+      }
       const k = wt + '|' + (l.rozmer||'').replace(/mm$/i,'').trim();
       let qty;
       if (l.isPipe) {
