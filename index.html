@@ -2545,16 +2545,19 @@ function renderZoznam() {
       : [];
 
     // Vydané položky (zvaracie) z vydajok tejto izometrie
-    const vydaneMap = {}; // "TYP|rozmer" → vydané množstvo (m pre pipe, ks pre ostatné)
+    // Normalizuj rozmer kľúč (odstráni mm, medzery)
+    function normKey(typ, rozmer) {
+      return (typ||'').toUpperCase() + '|' + (rozmer||'').replace(/mm$/i,'').trim();
+    }
+
+    const vydaneMap = {};
     lines.forEach(l => {
       if (!ZVARACIE_TYPY.includes((l.typ||'').toUpperCase())) return;
-      const k = (l.typ||'').toUpperCase() + '|' + (l.rozmer||'');
+      const k = normKey(l.typ, l.rozmer);
       let qty;
       if (l.isPipe) {
-        // PIPE: dlzka v mm alebo vydQty v m
         const fromDlzka = (parseFloat(l.dlzka)||0) / 1000;
         const fromVydQty = parseFloat(l.vydQty)||0;
-        // Použi väčšiu hodnotu - vydQty je v metroch, dlzka/1000 tiež
         qty = fromDlzka > 0 ? fromDlzka : fromVydQty;
       } else {
         qty = parseFloat(l.vydQty)||1;
@@ -2566,9 +2569,8 @@ function renderZoznam() {
     const mtoMap = {};
     mtoItems.forEach(m => {
       const rozmerKey = (m.popis||'').match(/(\d+\.?\d*x\d+\.?\d*mm?(?:\s*\/\s*\d+\.?\d*x\d+\.?\d*mm?)?)/i);
-      const rozmer = rozmerKey ? rozmerKey[1] : ('DN'+(m.dn||''));
-      const k = (m.weldType||'').toUpperCase() + '|' + rozmer;
-      // MTO mn: "3.5 M" → 3.5, "2" → 2
+      const rozmer = rozmerKey ? rozmerKey[1].replace(/mm$/i,'').trim() : ('DN'+(m.dn||''));
+      const k = normKey(m.weldType, rozmer);
       const mnVal = parseFloat((m.mn||'').toString().replace(/[mM\s]/g,''))||1;
       mtoMap[k] = (mtoMap[k]||0) + mnVal;
     });
@@ -2578,11 +2580,13 @@ function renderZoznam() {
     Object.keys(mtoMap).forEach(k => {
       const potreba = mtoMap[k];
       const vydane  = vydaneMap[k]||0;
-      const chyba   = potreba - vydane;
-      if (chyba > 0) {
+      const chyba   = Math.round((potreba - vydane)*100)/100;
+      if (chyba > 0.001) {
         chybaPocet++;
-        const [typ, rozmer] = k.split('|');
-        chybaDetail.push({ typ, rozmer, chyba: Math.round(chyba*100)/100 });
+        const sepIdx = k.indexOf('|');
+        const typ = k.substring(0, sepIdx);
+        const rozmer = k.substring(sepIdx+1);
+        chybaDetail.push({ typ, rozmer, chyba });
       }
     });
 
