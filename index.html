@@ -2300,15 +2300,26 @@ function openCoMozeme() {
     Object.values(mtoGrouped).forEach(function(m) {
       var jednotka = m.weldType === 'PIPE' ? 'm' : 'ks';
 
-      // Hľadaj v sklade
+      // Hľadaj v sklade — typ musí sedieť (PIPE=PIPE, ostatné=fittingy)
+      var isPipeMTO = m.weldType === 'PIPE';
       var found = items.filter(function(it) {
         if (parseFloat(it.zostatok) <= 0) return false;
+        // Typ match — PIPE len s PIPE, fittingy len s fittingmi
+        var itTypLower = (it.typ||'').toLowerCase();
+        var itIsPipe = itTypLower.includes('pipe');
+        if (isPipeMTO !== itIsPipe) return false;
+        // Pre fittingy skontroluj aj weldType
+        if (!isPipeMTO) {
+          var itWbTyp = wbShortType(it.typ);
+          if (itWbTyp && itWbTyp !== m.weldType) return false;
+        }
         var itRoz = (it.rozmer||'').toLowerCase().replace(/\s/g,'');
-        var mRoz = (m.dims||m.dn||'').toLowerCase().replace(/\s/g,'');
+        var mRoz = (m.dims||'').toLowerCase().replace(/\s/g,'');
+        var mRozFirst = mRoz.split('x')[0];
+        var itRozFirst = itRoz.split('x')[0];
+        var rozMatch = mRozFirst && itRozFirst && (mRozFirst === itRozFirst);
         var itMat = (it.material||'').toLowerCase();
         var mMat = (m.mat||'').toLowerCase();
-        var rozMatch = itRoz.includes(mRoz) || mRoz.includes(itRoz) ||
-                       itRoz.split('x')[0] === mRoz.split('x')[0];
         var matMatch = !mMat || itMat.includes(mMat) || mMat.includes(itMat);
         return rozMatch && matMatch;
       });
