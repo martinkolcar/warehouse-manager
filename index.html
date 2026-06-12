@@ -2443,18 +2443,6 @@ function clearZoznamFilter() {
 // Pomocné: zvaracie typy
 const ZVARACIE_TYPY = ['PIPE','ELBOW','ELBOW90','ELBOW45','TEE','REDUCER','REDUCER-ECC','REDUCER-CON','BRANCH','FLANGE','FLANGE-BLK','CAP'];
 
-// Klúč pre sklad status (per vydajka+typ+rozmer)
-if(!window._skladStatus) window._skladStatus = {};
-
-function setSkladStatus(key, val) {
-  window._skladStatus[key] = val;
-  // Ulož do Firebase
-  if(window._fbReady && window._currentProject) {
-    var base = 'projects/' + window._currentProject.id;
-    window._fbSet(window._fbRef(base + '/skladStatus'), window._skladStatus);
-  }
-}
-
 function renderZoznam() {
   const fTyp    = document.getElementById('zf-typ').value;
   const fRozmer = document.getElementById('zf-rozmer').value;
@@ -2561,11 +2549,28 @@ function renderZoznam() {
       chibaCell = `<span style="background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:4px;font-weight:700;font-size:13px" title="${chybaDetail.map(c=>c.typ+' '+c.rozmer+': '+c.chyba).join(', ')}">${chybaPocet}</span>`;
     }
 
-    // Sklad cell
-    const skladCell = vsetkoOK ? '' :
-      `<input type="text" value="${skladVal}" placeholder="sklad..."
-        onchange="setSkladStatus('${skladKey}',this.value);renderZoznam()"
-        style="width:70px;padding:3px 6px;border:1px solid #ddd;border-radius:4px;font-size:11px">`;
+    // Sklad cell - kontrola či chýbajúce fitingy sú dostupné na sklade (items)
+    let skladCell = '';
+    if (!vsetkoOK && chybaDetail.length) {
+      const chybaNaSklade = chybaDetail.filter(c => {
+        // Nájdi v items podľa typu + rozmeru
+        const found = items.find(it =>
+          (it.typ||'').toUpperCase() === c.typ.toUpperCase() &&
+          (it.rozmer||'') === c.rozmer &&
+          (parseFloat(it.zostatok)||0) >= c.chyba
+        );
+        return !!found;
+      });
+      const vsetkyNaSklade = chybaNaSklade.length === chybaDetail.length;
+      const niektoreNaSklade = chybaNaSklade.length > 0;
+      if (vsetkyNaSklade) {
+        skladCell = '<span style="background:#d1fae5;color:#065f46;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700">📦 sklad</span>';
+      } else if (niektoreNaSklade) {
+        skladCell = `<span style="background:#fef3c7;color:#92400e;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700">📦 ${chybaNaSklade.length}/${chybaDetail.length}</span>`;
+      } else {
+        skladCell = '<span style="color:#ccc;font-size:11px">—</span>';
+      }
+    }
 
     return `<tr style="border-bottom:1px solid #eef0f4" onmouseover="this.style.background='#f5f7ff'" onmouseout="this.style.background=''">
       <td style="padding:8px 10px;font-family:monospace;font-size:11px;max-width:260px">
@@ -3703,10 +3708,6 @@ function initFirebase() {
     }
   });
 
-  // Sklad status z Firebase (live)
-  window._fbOn(window._fbRef(base + '/skladStatus'), function(snap) {
-    window._skladStatus = snap.val() || {};
-  });
 }
 
 function save() {
