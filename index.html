@@ -1462,22 +1462,24 @@ function renderVydMatList() {
   // ── Sklad sekcia ──
   const avail = items.filter(it => parseFloat(it.zostatok) > 0);
 
-  // MTO kľúče pre filter (typ+rozmer)
+  // MTO kľúče pre filter (typ+rozmer) - všetky položky z MTO
   const mtoKeys = new Set();
   mtoItems.forEach(function(m) {
-    if (!ZVARACIE_TYPY.includes((m.weldType||'').toUpperCase())) return;
     var rozmerKey = (m.popis||'').match(/(\d+\.?\d*x\d+\.?\d*mm?)/i);
     var rozmer = rozmerKey ? rozmerKey[1] : ('DN'+(m.dn||''));
-    mtoKeys.add((m.weldType||'').toUpperCase() + '|' + rozmer);
-    // Pridaj aj varianty (s mm / bez mm)
-    mtoKeys.add((m.weldType||'').toUpperCase() + '|' + rozmer.replace('mm',''));
+    var typ = (m.weldType || m.kategoria || '').toUpperCase();
+    mtoKeys.add(typ + '|' + rozmer);
+    mtoKeys.add(typ + '|' + rozmer.replace('mm',''));
+    // Pridaj aj len podľa DN pre menej presné zhody
+    if (m.dn) mtoKeys.add(typ + '|DN' + m.dn);
   });
 
   // Filter sklad podľa MTO (ak nie je výnimka)
   const hasMTO = mtoItems.length > 0;
+  // Bez výnimky: zobraz len položky ktoré sú v MTO
+  // S výnimkou: zobraz celý sklad
   const availFiltered = hasMTO && !vydVynimkaMode
     ? avail.filter(it => {
-        if (!ZVARACIE_TYPY.includes((it.typ||'').toUpperCase())) return true; // nekontroluj niezvaracie
         const k1 = (it.typ||'').toUpperCase() + '|' + (it.rozmer||'');
         const k2 = (it.typ||'').toUpperCase() + '|' + (it.rozmer||'').replace('mm','');
         return mtoKeys.has(k1) || mtoKeys.has(k2);
@@ -2549,9 +2551,11 @@ function renderZoznam() {
       const k = (l.typ||'').toUpperCase() + '|' + (l.rozmer||'');
       let qty;
       if (l.isPipe) {
-        // PIPE: dlzka je v mm → preveď na m
-        qty = (parseFloat(l.dlzka)||0) / 1000;
-        if (qty === 0) qty = parseFloat(l.vydQty)||0; // fallback
+        // PIPE: dlzka v mm alebo vydQty v m
+        const fromDlzka = (parseFloat(l.dlzka)||0) / 1000;
+        const fromVydQty = parseFloat(l.vydQty)||0;
+        // Použi väčšiu hodnotu - vydQty je v metroch, dlzka/1000 tiež
+        qty = fromDlzka > 0 ? fromDlzka : fromVydQty;
       } else {
         qty = parseFloat(l.vydQty)||1;
       }
