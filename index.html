@@ -721,7 +721,11 @@ function parseHtml(html, filename) {
       const material = (norma.split(',')[0]||'').trim();
 
       // ── Tavba ──────────────────────────────────────────────────
-      const tavbaClean = (tavbaRaw||'').replace(/[✓√]/g,'').trim();
+      // Vyfiltruj jednotky a prázdne hodnoty — tavba nesmie byť m/ks/pcs/číslo
+      let tavbaClean = (tavbaRaw||'').replace(/[✓√]/g,'').trim();
+      if (/^(m|ks|pcs|pc|kg|t|l|ml)$/i.test(tavbaClean) || /^[\d.,]+$/.test(tavbaClean)) {
+        tavbaClean = '';
+      }
 
       // Ak je viac tavíeb (newline alebo čiarka) a každá má explicitné qty "-Nks"
       if (!isPipe && tavbaClean && (tavbaClean.includes('\n') || tavbaClean.includes(','))) {
@@ -2302,6 +2306,13 @@ function openCoMozeme() {
         return s + (parseFloat(it.zostatok)||0);
       }, 0);
 
+      // Potrebné množstvo z MTO — parsuj číslo
+      var mnNum = parseFloat((m.mn||'0').toString().replace(',','.')) || 0;
+      // Jednotka — PIPE = m, ostatné = ks
+      var jednotka = m.weldType === 'PIPE' ? 'm' : 'ks';
+      // Dostatok? Porovnaj stock vs potrebné
+      var maDostatok = totalStock >= mnNum && mnNum > 0;
+
       var entry = {
         weldType: m.weldType,
         dn: dnW,
@@ -2309,9 +2320,11 @@ function openCoMozeme() {
         mat: mat,
         popis: m.popis.substring(0,60),
         poz: m.poz,
-        mn: m.mn,
+        mn: mnNum,
+        jednotka: jednotka,
         stock: totalStock,
         stockItems: found.length,
+        maDostatok: maDostatok,
         tavby: found.map(function(it){ return it.tavba; }).filter(Boolean).join(', ')
       };
 
@@ -2345,11 +2358,15 @@ function openCoMozeme() {
       const availHtml = r.available.map(function(m) {
         var typeColors = {PIPE:'#dbeafe',ELBOW:'#dcfce7',TEE:'#fef9c3',REDUCER:'#fce7f3',FLANGE:'#ede9fe',CAP:'#ffedd5',VALVE:'#fee2e2',BRANCH:'#ccfbf1'};
         var bg = typeColors[m.weldType]||'#f1f5f9';
-        var stockStr = m.stockItems > 0 ? (m.stock > 0 ? '<span style="color:#16a34a;font-weight:700">' + m.stock.toFixed(1) + ' ' + (m.weldType==='PIPE'?'m':'ks') + '</span>' : '') : '';
-        return '<span style="display:inline-flex;align-items:center;gap:4px;background:'+bg+';padding:3px 8px;border-radius:4px;font-size:11px;margin:2px">' +
+        var jed = m.jednotka || (m.weldType==='PIPE'?'m':'ks');
+        var needStr = m.mn > 0 ? m.mn.toFixed(m.weldType==='PIPE'?1:0) + ' ' + jed : '';
+        var stockColor = m.maDostatok ? '#16a34a' : (m.stock > 0 ? '#d97706' : '#dc2626');
+        var stockStr = m.stock > 0 ? '<span style="color:'+stockColor+';font-weight:700">' + (m.weldType==='PIPE' ? m.stock.toFixed(1) : m.stock) + ' ' + jed + '</span>' : '<span style="color:#dc2626;font-weight:700">0</span>';
+        return '<span style="display:inline-flex;align-items:center;gap:4px;background:'+bg+';padding:3px 8px;border-radius:4px;font-size:11px;margin:2px;border:1px solid '+(m.maDostatok?'transparent':'#fca5a5')+'">' +
           '<strong>'+m.weldType+'</strong> DN'+m.dn +
-          (stockStr ? ' · '+stockStr : '') +
-          (m.tavby ? ' · <span style="color:#666;font-family:monospace">'+m.tavby.substring(0,20)+'</span>' : '') +
+          (needStr ? ' · <span style="color:#666">'+needStr+'</span>' : '') +
+          ' · ' + stockStr +
+          (m.tavby ? ' · <span style="color:#888;font-family:monospace;font-size:10px">'+m.tavby.substring(0,15)+'</span>' : '') +
           '</span>';
       }).join('');
 
