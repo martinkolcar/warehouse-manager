@@ -1422,6 +1422,21 @@ function clearVydFilters() {
 }
 
 // ─── ZOZNAM MATERIÁLOV v pravom paneli ────────
+function classifySkladTyp(typ) {
+  const t = (typ||'').toUpperCase();
+  if (t.includes('PIPE') || t.includes('RURA') || t.includes('RÚRA')) return 'PIPE';
+  if ((t.includes('ELBOW') || t.includes('OBLUK') || t.includes('OBLÚK') || t.includes('KOLENO')) && t.includes('45')) return 'ELBOW45';
+  if ((t.includes('ELBOW') || t.includes('OBLUK') || t.includes('OBLÚK') || t.includes('KOLENO')) && t.includes('90')) return 'ELBOW90';
+  if (t.includes('ELBOW') || t.includes('OBLUK') || t.includes('OBLÚK') || t.includes('KOLENO')) return 'ELBOW90';
+  if (t.includes('T-PIECE') || t.includes('T-KUS') || t.includes('TEE')) return 'TEE';
+  if (t.includes('BRANCH') || t.includes('ODBOČKA')) return 'BRANCH';
+  if (t.includes('REDUCER') || t.includes('REDUKCI')) return 'REDUCER';
+  if (t.includes('FLANGE') || t.includes('PRÍRUBA') || t.includes('PRIRUBA')) return 'FLANGE';
+  if (t.includes('CAP') || t.includes('ZÁSLEPKA') || t.includes('ZASLEPKA')) return 'CAP';
+  if (t.includes('VALVE') || t.includes('VENTIL') || t.includes('KLAPKA')) return 'VALVE';
+  return t.split(' ')[0];
+}
+
 function renderVydMatList() {
   const fTyp    = document.getElementById('vf-typ').value;
   const fRozmer = document.getElementById('vf-rozmer').value;
@@ -1463,21 +1478,6 @@ function renderVydMatList() {
   const avail = items.filter(it => parseFloat(it.zostatok) > 0);
 
   // Klasifikuje typ položky zo skladu (anglický názov) na weldType
-  function classifySkladTyp(typ) {
-    const t = (typ||'').toUpperCase();
-    if (t.includes('PIPE') || t.includes('RURA') || t.includes('RÚRA')) return 'PIPE';
-    if ((t.includes('ELBOW') || t.includes('OBLUK') || t.includes('OBLÚK') || t.includes('KOLENO')) && t.includes('45')) return 'ELBOW45';
-    if ((t.includes('ELBOW') || t.includes('OBLUK') || t.includes('OBLÚK') || t.includes('KOLENO')) && t.includes('90')) return 'ELBOW90';
-    if (t.includes('ELBOW') || t.includes('OBLUK') || t.includes('OBLÚK') || t.includes('KOLENO')) return 'ELBOW90';
-    if (t.includes('T-PIECE') || t.includes('T-KUS') || t.includes('TEE')) return 'TEE';
-    if (t.includes('BRANCH') || t.includes('ODBOČKA')) return 'BRANCH';
-    if (t.includes('REDUCER') || t.includes('REDUKCI')) return 'REDUCER';
-    if (t.includes('FLANGE') || t.includes('PRÍRUBA') || t.includes('PRIRUBA')) return 'FLANGE';
-    if (t.includes('CAP') || t.includes('ZÁSLEPKA') || t.includes('ZASLEPKA')) return 'CAP';
-    if (t.includes('VALVE') || t.includes('VENTIL') || t.includes('KLAPKA')) return 'VALVE';
-    return t.split(' ')[0]; // fallback - prvé slovo
-  }
-
   // MTO kľúče pre filter (typ+rozmer) - všetky položky z MTO
   const mtoKeys = new Set();
   mtoItems.forEach(function(m) {
