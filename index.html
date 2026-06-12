@@ -1665,10 +1665,24 @@ function addToVydajka(idx) {
     const existing = vydLines.findIndex(l => l.itemIdx === idx);
     if (existing >= 0) {
       vydLines[existing].vydQty = (parseFloat(vydLines[existing].vydQty)||0) + 1;
-      // Aktualizuj iba daný riadok bez rekreovania celého DOM
       const inp = document.querySelector(`#vyd-lines-tbody tr[data-idx="${existing}"] .inp-qty`);
       if (inp) inp.value = vydLines[existing].vydQty;
       updateVydCount();
+      // Obnov zelené ak ELBOW90
+      const tr = document.querySelector(`#vyd-lines-tbody tr[data-idx="${existing}"]`);
+      if (tr) {
+        const wt = classifySkladTyp(it.typ);
+        if (wt === 'ELBOW90') {
+          tr.style.background = '#f0fdf4';
+          if (!tr.querySelector('.rezany-badge')) {
+            const span = document.createElement('span');
+            span.className = 'rezany-badge';
+            span.style.cssText = 'font-size:10px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;font-weight:700;display:inline-block;margin-left:2px';
+            span.textContent = '✂️ →ELBOW45';
+            tr.cells[0].appendChild(span);
+          }
+        }
+      }
       return;
     }
   }
@@ -2813,10 +2827,46 @@ function deleteVydajka(idx) {
   const v = vydajkyList[idx];
   if (!v) return;
   if (!confirm('Vymazať výdajku pre ' + v.iso + '?\nMnožstvá sa vrátia späť do skladu.')) return;
+
+  // Vráť vydané množstvá do skladu
   (v.lines||[]).forEach(l => {
     const found = items.findIndex(it => it.typ===l.typ && it.rozmer===l.rozmer && it.tavba===l.tavba);
     if (found >= 0) {
       items[found].zostatok = Math.round(((parseFloat(items[found].zostatok)||0) + (parseFloat(l.vydQty)||0)) * 10000) / 10000;
+    }
+  });
+
+  // Ak boli ELBOW90 rezané → odčítaj extra ELBOW45 ktoré pribudli do skladu
+  const rozmerGroups = {};
+  (v.lines||[]).forEach(l => {
+    const wt = classifySkladTyp(l.typ);
+    if (wt !== 'ELBOW90' && wt !== 'ELBOW45') return;
+    const roz = (l.rozmer||'').replace(/mm$/i,'').trim();
+    if (!rozmerGroups[roz]) rozmerGroups[roz] = {qty90:0, qty45:0};
+    if (wt === 'ELBOW90') rozmerGroups[roz].qty90 += parseFloat(l.vydQty)||0;
+    if (wt === 'ELBOW45') rozmerGroups[roz].qty45 += parseFloat(l.vydQty)||0;
+  });
+
+  Object.keys(rozmerGroups).forEach(roz => {
+    const grp = rozmerGroups[roz];
+    if (grp.qty90 <= 0) return;
+    const gained45 = grp.qty90 * 2;
+    const mtoItems = getMTOForIso(v.iso) || [];
+    let needed45 = mtoItems.filter(m =>
+      (m.weldType||'').toUpperCase() === 'ELBOW45' && (m.popis||'').includes(roz)
+    ).reduce((s,m) => s + (parseFloat(m.mn)||1), 0);
+    if (needed45 <= 0) return;
+    const extra45 = Math.max(0, Math.round((gained45 + grp.qty45 - needed45) * 10000) / 10000);
+    if (extra45 <= 0) return;
+    // Odčítaj extra ELBOW45 zo skladu
+    const e45idx = items.findIndex(it2 =>
+      classifySkladTyp(it2.typ) === 'ELBOW45' &&
+      (it2.rozmer||'').replace(/mm$/i,'').trim() === roz
+    );
+    if (e45idx >= 0) {
+      items[e45idx].zostatok = Math.max(0,
+        Math.round(((parseFloat(items[e45idx].zostatok)||0) - extra45) * 10000) / 10000
+      );
     }
   });
 
