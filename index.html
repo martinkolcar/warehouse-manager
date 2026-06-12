@@ -2577,16 +2577,19 @@ function renderZoznam() {
 
     let chybaPocet = 0;
     const chybaDetail = [];
+    const vydaneDetail = [];
     Object.keys(mtoMap).forEach(k => {
       const potreba = mtoMap[k];
       const vydane  = vydaneMap[k]||0;
       const chyba   = Math.round((potreba - vydane)*100)/100;
+      const sepIdx  = k.indexOf('|');
+      const typ     = k.substring(0, sepIdx);
+      const rozmer  = k.substring(sepIdx+1);
       if (chyba > 0.001) {
         chybaPocet++;
-        const sepIdx = k.indexOf('|');
-        const typ = k.substring(0, sepIdx);
-        const rozmer = k.substring(sepIdx+1);
         chybaDetail.push({ typ, rozmer, chyba });
+      } else if (vydane > 0) {
+        vydaneDetail.push({ typ, rozmer, qty: Math.round(vydane*100)/100 });
       }
     });
 
@@ -2635,7 +2638,10 @@ function renderZoznam() {
     return `<tr style="border-bottom:1px solid #eef0f4" onmouseover="this.style.background='#f5f7ff'" onmouseout="this.style.background=''">
       <td style="padding:8px 10px;font-family:monospace;font-size:11px;max-width:260px">
         <strong style="color:#1a1a2e">${iso}</strong>
-        ${chybaDetail.length ? '<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:3px">' + chybaDetail.map(c=>`<span style="font-size:10px;background:#fee2e2;color:#dc2626;padding:1px 6px;border-radius:3px">${c.typ} ${c.rozmer}: <b>${c.chyba}</b></span>`).join('') + '</div>' : ''}
+        ${(chybaDetail.length||vydaneDetail.length) ? '<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:3px">' +
+          chybaDetail.map(c=>`<span style="font-size:10px;background:#fee2e2;color:#dc2626;padding:1px 6px;border-radius:3px">${c.typ} ${c.rozmer}: <b>${c.chyba}</b></span>`).join('') +
+          vydaneDetail.map(c=>`<span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:3px">${c.typ} ${c.rozmer}: <b>${c.qty}</b></span>`).join('') +
+          '</div>' : ''}
       </td>
       <td style="padding:8px 10px;text-align:center">
         <span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700">${grp.vydajky.length}×</span>
