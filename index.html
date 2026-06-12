@@ -1959,12 +1959,20 @@ function odcitajSklad() {
     // Koľko ELBOW45 získame z rezania
     const gained45 = grp.qty90 * 2;
     // Koľko ELBOW45 bolo potrebných z MTO pre tento rozmer
-    const needed45 = mtoItems.filter(m =>
+    let needed45 = mtoItems.filter(m =>
       (m.weldType||'').toUpperCase() === 'ELBOW45' &&
       (m.popis||'').includes(roz)
     ).reduce((s,m) => s + (parseFloat(m.mn)||1), 0);
 
-    // Extra = gained + vydané priamo - potreba
+    // Ak MTO nie je načítané alebo nič nenašlo - vypočítaj z vydajky
+    // needed45 = gained45 + qty45 (všetko vydané ide na izometriu, nič extra)
+    // To znamená extra = 0 ak MTO nepoznáme - bezpečný fallback
+    if (needed45 <= 0) {
+      // Bez MTO nevieme koľko ostalo - pridáme 0 (bezpečné)
+      return;
+    }
+
+    // Extra = gained z rezania + vydané priamo - potreba z MTO
     const extra45 = Math.round((gained45 + grp.qty45 - needed45) * 10000) / 10000;
 
     if (extra45 <= 0) return;
