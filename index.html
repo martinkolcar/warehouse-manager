@@ -1165,53 +1165,23 @@ function classifyWeldType(popis) {
   var p = popis.toUpperCase();
   if (p.includes('RÚRA') || p.includes('RURA')) return 'PIPE';
   if ((p.includes('OBLÚK') || p.includes('OBLUK') || p.includes('KOLENO')) && p.includes('45')) return 'ELBOW45';
-  if ((p.includes('OBLÚK') || p.includes('OBLUK') || p.includes('KOLENO')) && p.includes('90')) return 'ELBOW90';
-  if (p.includes('OBLÚK') || p.includes('OBLUK') || p.includes('KOLENO')) return 'ELBOW90'; // default 90
+  if (p.includes('OBLÚK') || p.includes('OBLUK') || p.includes('KOLENO')) return 'ELBOW';
   if (p.includes('T-KUS') || p.includes('TKUS')) return 'TEE';
   if (p.includes('ODBOČKA')) return 'BRANCH';
-  if (p.includes('REDUKCI') && p.includes('EXC')) return 'REDUCER-ECC';
-  if (p.includes('REDUKCI') && p.includes('KON')) return 'REDUCER-CON';
   if (p.includes('REDUKCI')) return 'REDUCER';
-  if (p.includes('ZASLEPOVACIA PRÍRUBA') || p.includes('ZASLEPOVACIA PRIRUBA')) return 'FLANGE-BLK';
-  if (p.includes('PRÍRUBA') || p.includes('PRIRUBA')) return 'FLANGE';
+  if (p.includes('PRÍRUBA') || p.includes('PRIRUBA') || p.includes('ZASLEPOVACIA')) return 'FLANGE';
   if (p.includes('ZÁSLEPKA') || p.includes('ZASLEPKA')) return 'CAP';
+  // Ventil/klapka s prírubami = prírubový spoj, nie zvar
   if ((p.includes('VENTIL') || p.includes('KLAPKA')) && (p.includes('PRÍRUB') || p.includes('PRIRUB') || p.includes('PN'))) return null;
   if (p.includes('KLAPKA') || p.includes('VENTIL')) return 'VALVE';
-  if (p.includes('FILTER')) return 'FILTER';
-  if (p.includes('PODPERA') || p.includes('STOJAN') || p.includes('PK')) return null; // uloženia - nevydávame
   return null;
 }
 
-function extractDimsFromPopis(popis, dn) {
-  var p = popis;
-
-  // Redukcia: oba rozmery s hrúbkou napr. 355.6x8.8mm / 273.0x7.0mm
-  var redFull = p.match(/(\d+\.?\d*)x(\d+\.?\d*)mm?\s*[\/]\s*(\d+\.?\d*)x(\d+\.?\d*)mm?/i);
-  if (redFull) {
-    var size = redFull[1]+'x'+redFull[2]+' / '+redFull[3]+'x'+redFull[4];
-    return { od: redFull[1], wt: redFull[2], od2: redFull[3], wt2: redFull[4], size: size, isReducer: true };
-  }
-
-  // Redukcia: prvý rozmer s hrúbkou, druhý len OD napr. 355.6x8.8mm / 273.0mm
-  var redPartial = p.match(/(\d+\.?\d*)x(\d+\.?\d*)mm?\s*[\/]\s*(\d+\.?\d*)mm?/i);
-  if (redPartial) {
-    var size = redPartial[1]+'x'+redPartial[2]+' / '+redPartial[3];
-    return { od: redPartial[1], wt: redPartial[2], od2: redPartial[3], wt2: '', size: size, isReducer: true };
-  }
-
-  // Štandardný rozmer napr. 355.6x8.8mm
-  var m = p.match(/(\d+\.?\d*)x(\d+\.?\d*)mm/i);
+function extractDimsFromPopis(popis) {
+  var m = popis.match(/(\d+\.?\d*)x(\d+\.?\d*)mm/i);
   if (m) return { od: m[1], wt: m[2], size: m[1]+'x'+m[2] };
-
-  // Hrúbka príruby napr. s=8.8mm — vrátime DN + hrúbku
-
-  // DN rozmer napr. DN 350
-  var m2 = p.match(/DN\s*(\d+)/i);
-  if (m2) return { od: m2[1], wt: '', size: 'DN'+m2[1] };
-
-  // Fallback na DN parameter
-  if (dn) return { od: String(dn), wt: '', size: 'DN'+dn };
-
+  var m2 = popis.match(/DN\s*(\d+)/i);
+  if (m2) return { od: m2[1], wt: '', size: m2[1] };
   return { od: '', wt: '', size: '' };
 }
 
@@ -1465,25 +1435,20 @@ function renderVydMatList() {
     html += '<div style="background:#f0fdf4;border:1px solid #10b981;border-radius:6px;padding:10px;margin-bottom:10px">';
     html += '<div style="font-size:11px;font-weight:700;color:#065f46;margin-bottom:6px">📋 MTO — MATERIÁLY IZOMETRIE</div>';
     mtoItems.forEach(function(m, idx) {
-      var dims = extractDimsFromPopis(m.popis, m.dn);
+      var dims = extractDimsFromPopis(m.popis);
       var mat  = extractMaterialFromPopis(m.popis);
       var wt = m.weldType;
-      var typeColors = {
-        PIPE:'#dbeafe', ELBOW90:'#dcfce7', ELBOW45:'#bbf7d0',
-        TEE:'#fef9c3', REDUCER:'#fce7f3', 'REDUCER-ECC':'#fce7f3', 'REDUCER-CON':'#fce7f3',
-        FLANGE:'#ede9fe', 'FLANGE-BLK':'#ddd6fe',
-        CAP:'#ffedd5', VALVE:'#fee2e2', BRANCH:'#ccfbf1', FILTER:'#fef3c7'
-      };
+      var typeColors = {PIPE:'#dbeafe',ELBOW:'#dcfce7',TEE:'#fef9c3',REDUCER:'#fce7f3',FLANGE:'#ede9fe',CAP:'#ffedd5',VALVE:'#fee2e2',BRANCH:'#ccfbf1'};
       var bg = wt ? (typeColors[wt]||'#f9fafb') : '#f1f5f9';
       var label = wt || (m.kategoria||'').toUpperCase().substring(0,8) || 'INÉ';
-      var rozmerText = dims.size ? dims.size + 'mm' : ('DN'+m.dn);
       html += '<div onclick="addMTOToVydajka(' + idx + ')" style="padding:8px;border-bottom:1px solid #e5e7eb;cursor:pointer;display:flex;align-items:center;gap:8px;background:white;border-radius:4px;margin-bottom:4px">';
-      html += '<span style="background:'+bg+';padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700;min-width:68px;text-align:center">'+label+'</span>';
+      html += '<span style="background:'+bg+';padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700;min-width:60px;text-align:center">'+label+'</span>';
       html += '<div style="flex:1;font-size:12px">';
-      html += '<div><strong>' + rozmerText + '</strong>';
+      html += '<div><strong>DN'+getWeldableDN(m.dn)+'</strong>';
+      if (dims.size) html += ' &nbsp;<span style="color:#666">'+dims.size+'mm</span>';
       if (mat) html += ' &nbsp;<span style="color:#059669">'+mat+'</span>';
       html += '</div>';
-      html += '<div style="color:#9ca3af;font-size:10px">POZ.'+m.poz+' &nbsp;·&nbsp; MN:'+m.mn+' &nbsp;·&nbsp; <span style="color:#555">'+m.popis.substring(0,55)+'</span></div>';
+      html += '<div style="color:#9ca3af;font-size:10px">POZ.'+m.poz+' &nbsp;·&nbsp; '+m.mn+' &nbsp;·&nbsp; <span style="color:#555">'+m.popis.substring(0,50)+'</span></div>';
       html += '</div>';
       html += wt ? '<span style="font-size:10px;color:#10b981;font-weight:600">🔧 vydať</span>' : '<span style="font-size:10px;color:#94a3b8">vydať</span>';
       html += '</div>';
@@ -1548,18 +1513,16 @@ function addMTOToVydajka(mtoIdx) {
   var m = (window._currentMTOItems||[])[mtoIdx];
   if (!m) return;
 
-  var dims = extractDimsFromPopis(m.popis, m.dn);
+  var dims = extractDimsFromPopis(m.popis);
   var mat  = extractMaterialFromPopis(m.popis);
   var isPipe = m.weldType === 'PIPE';
-  // Rozmer: pre redukovací spoj napr. 355.6/273.0mm, inak štandardný
-  var rozmerFinal = dims.size ? (dims.size + 'mm') : String(m.dn);
 
   vydLines.push({
     itemIdx: null,        // nie zo skladu — z MTO
     typ: m.weldType,
-    rozmer: rozmerFinal,
+    rozmer: dims.size || m.dn,
     material: mat,
-    norma: m.popis,      // celý popis ako norma pre referenciu
+    norma: '',
     tavba: '',
     jednotka: isPipe ? 'm' : 'ks',
     stockMax: 0,
@@ -2281,6 +2244,7 @@ function buildVydPdfHtml(cislo, iso, sec, datum, rows, thPipe) {
         <option value="">— materiál —</option>
       </select>
       <input id="zf-tavba" oninput="renderZoznam()" placeholder="Tavba..." style="padding:5px 8px;border:1px solid #ccc;border-radius:5px;font-size:12px;width:120px">
+      <input id="zf-iso" oninput="renderZoznam()" placeholder="🔍 Izometria..." style="padding:5px 8px;border:1px solid #4f7cff;border-radius:5px;font-size:12px;width:150px;color:#1a1a2e">
       <button onclick="clearZoznamFilter()" style="padding:5px 12px;border:1px solid #ccc;border-radius:5px;background:#fff;font-size:12px;cursor:pointer">× reset</button>
       <span id="zf-info" style="font-size:11px;color:#888"></span>
     </div>
@@ -2292,7 +2256,9 @@ function buildVydPdfHtml(cislo, iso, sec, datum, rows, thPipe) {
             <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#666;border-bottom:2px solid #dde1e7">Izometria</th>
             <th style="padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;color:#666;border-bottom:2px solid #dde1e7">Sekcia</th>
             <th style="padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;color:#666;border-bottom:2px solid #dde1e7">Dátum</th>
-            <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#666;border-bottom:2px solid #dde1e7">Položky / Nájdené</th>
+            <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#666;border-bottom:2px solid #dde1e7">Položky</th>
+            <th style="padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;color:#e53e3e;border-bottom:2px solid #dde1e7">Chýba</th>
+            <th style="padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;color:#38a169;border-bottom:2px solid #dde1e7">Sklad</th>
             <th style="padding:8px 10px;border-bottom:2px solid #dde1e7"></th>
           </tr>
         </thead>
@@ -2325,7 +2291,7 @@ function openCoMozeme() {
     // Najprv zoskup MTO položky podľa weldType+DN — sčítaj mn
     var mtoGrouped = {};
     mtoItems.forEach(function(m) {
-      var dims = extractDimsFromPopis(m.popis, m.dn);
+      var dims = extractDimsFromPopis(m.popis);
       var mat = extractMaterialFromPopis(m.popis);
       var dnW = getWeldableDN(m.dn);
       var key = m.weldType + '||' + dnW;
@@ -2470,7 +2436,23 @@ function clearZoznamFilter() {
   document.getElementById('zf-rozmer').value = '';
   document.getElementById('zf-mat').value = '';
   document.getElementById('zf-tavba').value = '';
+  document.getElementById('zf-iso').value = '';
   renderZoznam();
+}
+
+// Pomocné: zvaracie typy
+const ZVARACIE_TYPY = ['PIPE','ELBOW','ELBOW90','ELBOW45','TEE','REDUCER','REDUCER-ECC','REDUCER-CON','BRANCH','FLANGE','FLANGE-BLK','CAP'];
+
+// Klúč pre sklad status (per vydajka+typ+rozmer)
+if(!window._skladStatus) window._skladStatus = {};
+
+function setSkladStatus(key, val) {
+  window._skladStatus[key] = val;
+  // Ulož do Firebase
+  if(window._fbReady && window._currentProject) {
+    var base = 'projects/' + window._currentProject.id;
+    window._fbSet(window._fbRef(base + '/skladStatus'), window._skladStatus);
+  }
 }
 
 function renderZoznam() {
@@ -2478,13 +2460,27 @@ function renderZoznam() {
   const fRozmer = document.getElementById('zf-rozmer').value;
   const fMat    = document.getElementById('zf-mat').value;
   const fTavba  = document.getElementById('zf-tavba').value.toLowerCase().trim();
+  const fIso    = document.getElementById('zf-iso').value.toLowerCase().trim();
   const tbody   = document.getElementById('zoznam-tbody');
-  const hasFilter = fTyp || fRozmer || fMat || fTavba;
+  const hasItemFilter = fTyp || fRozmer || fMat || fTavba;
 
-  const list = vydajkyList;
-  document.getElementById('zoznam-count').textContent = list.length + ' výdajok';
+  // Zoskup vydajky podľa izometrie
+  const byIso = {};
+  vydajkyList.forEach((v, idx) => {
+    const iso = (v.iso||'').replace(/\.[^.]+$/, '');
+    if (!byIso[iso]) byIso[iso] = { iso, vydajky: [], lines: [] };
+    byIso[iso].vydajky.push({ v, idx });
+    (v.lines||[]).forEach(l => byIso[iso].lines.push(l));
+  });
 
-  if (!list.length) {
+  let isos = Object.keys(byIso).sort();
+
+  // Filter izometrie
+  if (fIso) isos = isos.filter(iso => iso.toLowerCase().includes(fIso));
+
+  document.getElementById('zoznam-count').textContent = isos.length + ' izometrií / ' + vydajkyList.length + ' výdajok';
+
+  if (!isos.length) {
     tbody.innerHTML = '';
     document.getElementById('zoznam-empty').style.display = 'block';
     document.getElementById('zoznam-table').style.display = 'none';
@@ -2493,54 +2489,106 @@ function renderZoznam() {
   document.getElementById('zoznam-empty').style.display = 'none';
   document.getElementById('zoznam-table').style.display = 'table';
 
-  let shown = 0;
-  tbody.innerHTML = [...list].reverse().map((v, ri) => {
-    const realIdx = list.length - 1 - ri;
-    const lines = v.lines || [];
+  tbody.innerHTML = isos.map(iso => {
+    const grp = byIso[iso];
+    const lines = grp.lines;
 
-    // Nájdi matchujúce položky
-    const matched = hasFilter ? lines.filter(l =>
+    // Filter položiek
+    const matched = hasItemFilter ? lines.filter(l =>
       (!fTyp    || (l.typ||'').includes(fTyp)) &&
       (!fRozmer || l.rozmer === fRozmer) &&
       (!fMat    || (l.material||'') === fMat) &&
       (!fTavba  || (l.tavba||'').toLowerCase().includes(fTavba))
-    ) : [];
+    ) : null;
+    if (hasItemFilter && matched.length === 0) return '';
 
-    // Ak je filter aktívny a nič nenájde → preskočiť
-    if (hasFilter && matched.length === 0) return '';
-    shown++;
+    // MTO porovnanie - zvaracie položky
+    const mtoItems = (window.mtoData && window.mtoData.loaded)
+      ? window.mtoData.materials.filter(m => {
+          const mSubor = (m.subor||'').replace(/\.[^.]+$/,'').replace(/[_-]/g,'').toLowerCase();
+          const mIso   = (m.izometria||'').replace(/[_-]/g,'').toLowerCase();
+          const isoN   = iso.replace(/[_-]/g,'').toLowerCase();
+          return (mSubor === isoN || mIso === isoN) && ZVARACIE_TYPY.includes((m.weldType||'').toUpperCase());
+        })
+      : [];
 
-    const matchHtml = matched.length
-      ? '<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">' +
-        matched.map(l => `<span style="font-size:10px;background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:3px;font-family:monospace">
-          ${l.rozmer} · ${l.material||''} · <strong>${l.tavba||'—'}</strong> · ${l.vydQty} ${l.jednotka}</span>`).join('') +
-        '</div>'
-      : '';
+    // Vydané položky (zvaracie) z vydajok tejto izometrie
+    const vydaneMap = {}; // "TYP|rozmer" → vydQty
+    lines.forEach(l => {
+      if (!ZVARACIE_TYPY.includes((l.typ||'').toUpperCase())) return;
+      const k = (l.typ||'').toUpperCase() + '|' + (l.rozmer||'');
+      vydaneMap[k] = (vydaneMap[k]||0) + (parseFloat(l.vydQty)||1);
+    });
+
+    // Vypočítaj chýba
+    const mtoMap = {};
+    mtoItems.forEach(m => {
+      const rozmerKey = (m.popis||'').match(/(\d+\.?\d*x\d+\.?\d*mm?(?:\s*\/\s*\d+\.?\d*x\d+\.?\d*mm?)?)/i);
+      const rozmer = rozmerKey ? rozmerKey[1] : ('DN'+(m.dn||''));
+      const k = (m.weldType||'').toUpperCase() + '|' + rozmer;
+      mtoMap[k] = (mtoMap[k]||0) + (parseFloat(m.mn)||1);
+    });
+
+    let chybaPocet = 0;
+    const chybaDetail = [];
+    Object.keys(mtoMap).forEach(k => {
+      const potreba = mtoMap[k];
+      const vydane  = vydaneMap[k]||0;
+      const chyba   = potreba - vydane;
+      if (chyba > 0) {
+        chybaPocet++;
+        const [typ, rozmer] = k.split('|');
+        chybaDetail.push({ typ, rozmer, chyba: Math.round(chyba*100)/100 });
+      }
+    });
+
+    const vsetkoOK = mtoItems.length > 0 && chybaPocet === 0;
+    const skladKey = 'sklad_' + iso;
+    const skladVal = (window._skladStatus||{})[skladKey] || '';
+
+    // Posledná vydajka dátum
+    const lastVyd = grp.vydajky[grp.vydajky.length-1];
+    const lastIdx = lastVyd.idx;
+    const lastDatum = lastVyd.v.datum || '';
+
+    // Chýba cell
+    let chibaCell = '';
+    if (!mtoItems.length) {
+      chibaCell = '<span style="color:#aaa;font-size:11px">—</span>';
+    } else if (vsetkoOK) {
+      chibaCell = '<span style="font-size:18px">✅</span>';
+    } else {
+      chibaCell = `<span style="background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:4px;font-weight:700;font-size:13px" title="${chybaDetail.map(c=>c.typ+' '+c.rozmer+': '+c.chyba).join(', ')}">${chybaPocet}</span>`;
+    }
+
+    // Sklad cell
+    const skladCell = vsetkoOK ? '' :
+      `<input type="text" value="${skladVal}" placeholder="sklad..."
+        onchange="setSkladStatus('${skladKey}',this.value);renderZoznam()"
+        style="width:70px;padding:3px 6px;border:1px solid #ddd;border-radius:4px;font-size:11px">`;
 
     return `<tr style="border-bottom:1px solid #eef0f4" onmouseover="this.style.background='#f5f7ff'" onmouseout="this.style.background=''">
-      <td style="padding:8px 10px;font-family:monospace;font-size:11px;max-width:280px">
-        <strong style="color:#1a1a2e">${v.iso}</strong>
-        ${matchHtml}
+      <td style="padding:8px 10px;font-family:monospace;font-size:11px;max-width:260px">
+        <strong style="color:#1a1a2e">${iso}</strong>
+        ${chybaDetail.length ? '<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:3px">' + chybaDetail.map(c=>`<span style="font-size:10px;background:#fee2e2;color:#dc2626;padding:1px 6px;border-radius:3px">${c.typ} ${c.rozmer}: <b>${c.chyba}</b></span>`).join('') + '</div>' : ''}
       </td>
       <td style="padding:8px 10px;text-align:center">
-        <span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700">${v.sec||'—'}</span>
+        <span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700">${grp.vydajky.length}×</span>
+        <div style="font-size:10px;color:#999;margin-top:2px">${lastDatum}</div>
       </td>
-      <td style="padding:8px 10px;text-align:center;color:#666;white-space:nowrap">${v.datum}</td>
-      <td style="padding:8px 10px;color:#666;font-size:11px">
-        ${lines.length} položiek
-        ${matched.length ? `<span style="color:#1d4ed8;font-weight:700;margin-left:6px">→ ${matched.length} zhoda</span>` : ''}
-      </td>
+      <td style="padding:8px 10px;text-align:center;color:#666;white-space:nowrap">${lastDatum}</td>
+      <td style="padding:8px 10px;color:#666;font-size:11px">${lines.length} pol.</td>
+      <td style="padding:8px 10px;text-align:center">${chibaCell}</td>
+      <td style="padding:8px 10px;text-align:center">${skladCell}</td>
       <td style="padding:8px 10px;white-space:nowrap;text-align:right">
-        <button class="act-btn" onclick="openVydNahladFromData(vydajkyList[${realIdx}])" style="color:#4f7cff;border-color:#4f7cff">👁 PDF</button>
-        <button class="act-btn" onclick="document.getElementById('zoznam-overlay').style.display='none';editVydajka(${realIdx})" style="color:#27ae60;border-color:#27ae60">✏️ Upraviť</button>
-        <button class="act-btn del" onclick="deleteVydajka(${realIdx})">🗑</button>
+        <button class="act-btn" onclick="openVydNahladFromData(vydajkyList[${lastIdx}])" style="color:#4f7cff;border-color:#4f7cff">👁 PDF</button>
+        <button class="act-btn" onclick="document.getElementById('zoznam-overlay').style.display='none';editVydajka(${lastIdx})" style="color:#27ae60;border-color:#27ae60">✏️</button>
+        <button class="act-btn del" onclick="deleteVydajka(${lastIdx})">🗑</button>
       </td>
     </tr>`;
   }).join('');
 
-  document.getElementById('zf-info').textContent = hasFilter
-    ? `Nájdené v ${shown} výdajkách`
-    : '';
+  document.getElementById('zf-info').textContent = fIso ? `Izometria: "${fIso}"` : '';
 }
 
 function deleteVydajka(idx) {
@@ -3651,8 +3699,13 @@ function initFirebase() {
       window.mtoData = fbMTO;
       window.mtoData.loaded = true;
       updateMTOBadge();
-      window._projectIsos = null; // reset cache
+      window._projectIsos = null;
     }
+  });
+
+  // Sklad status z Firebase (live)
+  window._fbOn(window._fbRef(base + '/skladStatus'), function(snap) {
+    window._skladStatus = snap.val() || {};
   });
 }
 
