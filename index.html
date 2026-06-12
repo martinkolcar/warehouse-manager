@@ -1462,15 +1462,32 @@ function renderVydMatList() {
   // ── Sklad sekcia ──
   const avail = items.filter(it => parseFloat(it.zostatok) > 0);
 
+  // Klasifikuje typ položky zo skladu (anglický názov) na weldType
+  function classifySkladTyp(typ) {
+    const t = (typ||'').toUpperCase();
+    if (t.includes('PIPE') || t.includes('RURA') || t.includes('RÚRA')) return 'PIPE';
+    if ((t.includes('ELBOW') || t.includes('OBLUK') || t.includes('OBLÚK') || t.includes('KOLENO')) && t.includes('45')) return 'ELBOW45';
+    if ((t.includes('ELBOW') || t.includes('OBLUK') || t.includes('OBLÚK') || t.includes('KOLENO')) && t.includes('90')) return 'ELBOW90';
+    if (t.includes('ELBOW') || t.includes('OBLUK') || t.includes('OBLÚK') || t.includes('KOLENO')) return 'ELBOW90';
+    if (t.includes('T-PIECE') || t.includes('T-KUS') || t.includes('TEE')) return 'TEE';
+    if (t.includes('BRANCH') || t.includes('ODBOČKA')) return 'BRANCH';
+    if (t.includes('REDUCER') || t.includes('REDUKCI')) return 'REDUCER';
+    if (t.includes('FLANGE') || t.includes('PRÍRUBA') || t.includes('PRIRUBA')) return 'FLANGE';
+    if (t.includes('CAP') || t.includes('ZÁSLEPKA') || t.includes('ZASLEPKA')) return 'CAP';
+    if (t.includes('VALVE') || t.includes('VENTIL') || t.includes('KLAPKA')) return 'VALVE';
+    return t.split(' ')[0]; // fallback - prvé slovo
+  }
+
   // MTO kľúče pre filter (typ+rozmer) - všetky položky z MTO
   const mtoKeys = new Set();
   mtoItems.forEach(function(m) {
     var rozmerKey = (m.popis||'').match(/(\d+\.?\d*x\d+\.?\d*mm?)/i);
     var rozmer = rozmerKey ? rozmerKey[1] : ('DN'+(m.dn||''));
+    var rozmerNorm = rozmer.replace(/mm$/i,'').trim();
     var typ = (m.weldType || m.kategoria || '').toUpperCase();
+    // Pridaj presný typ
+    mtoKeys.add(typ + '|' + rozmerNorm);
     mtoKeys.add(typ + '|' + rozmer);
-    mtoKeys.add(typ + '|' + rozmer.replace('mm',''));
-    // Pridaj aj len podľa DN pre menej presné zhody
     if (m.dn) mtoKeys.add(typ + '|DN' + m.dn);
   });
 
@@ -1480,8 +1497,11 @@ function renderVydMatList() {
   // S výnimkou: zobraz celý sklad
   const availFiltered = hasMTO && !vydVynimkaMode
     ? avail.filter(it => {
-        const k1 = (it.typ||'').toUpperCase() + '|' + (it.rozmer||'');
-        const k2 = (it.typ||'').toUpperCase() + '|' + (it.rozmer||'').replace('mm','');
+        // Klasifikuj typ zo skladu na weldType
+        const wt = classifySkladTyp(it.typ);
+        const rozNorm = (it.rozmer||'').replace(/mm$/i,'').trim();
+        const k1 = wt + '|' + rozNorm;
+        const k2 = wt + '|' + (it.rozmer||'');
         return mtoKeys.has(k1) || mtoKeys.has(k2);
       })
     : avail;
@@ -2553,7 +2573,9 @@ function renderZoznam() {
     const vydaneMap = {};
     lines.forEach(l => {
       if (!ZVARACIE_TYPY.includes((l.typ||'').toUpperCase())) return;
-      const k = normKey(l.typ, l.rozmer);
+      // Klasifikuj typ vydajky na weldType pre zhodu s mtoMap
+      const wt = classifySkladTyp(l.typ) || (l.typ||'').toUpperCase();
+      const k = wt + '|' + (l.rozmer||'').replace(/mm$/i,'').trim();
       let qty;
       if (l.isPipe) {
         const fromDlzka = (parseFloat(l.dlzka)||0) / 1000;
@@ -2565,12 +2587,11 @@ function renderZoznam() {
       vydaneMap[k] = (vydaneMap[k]||0) + qty;
     });
 
-    // Vypočítaj chýba
     const mtoMap = {};
     mtoItems.forEach(m => {
       const rozmerKey = (m.popis||'').match(/(\d+\.?\d*x\d+\.?\d*mm?(?:\s*\/\s*\d+\.?\d*x\d+\.?\d*mm?)?)/i);
       const rozmer = rozmerKey ? rozmerKey[1].replace(/mm$/i,'').trim() : ('DN'+(m.dn||''));
-      const k = normKey(m.weldType, rozmer);
+      const k = (m.weldType||'').toUpperCase() + '|' + rozmer;
       const mnVal = parseFloat((m.mn||'').toString().replace(/[mM\s]/g,''))||1;
       mtoMap[k] = (mtoMap[k]||0) + mnVal;
     });
