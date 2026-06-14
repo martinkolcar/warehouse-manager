@@ -2892,7 +2892,21 @@ function deleteVydajka(idx) {
     // Ale potreba_z_rezania = gained45 - extra = ?
     // RIEŠENIE: uložíme extra45 do vydajky pri save a tu ho použijeme
     // extra45Saved = skutočné extra ELBOW45 ktoré pribudli do skladu
-    const realExtra = (grp.ref && grp.ref.extra45Saved) ? grp.ref.extra45Saved : 0;
+    let realExtra = (grp.ref && grp.ref.extra45Saved) ? grp.ref.extra45Saved : 0;
+
+    // Ak extra45Saved nie je uložené (stará vydajka) → vypočítaj z MTO
+    if (!realExtra) {
+      const gained45 = grp.qty90 * 2;
+      const mtoItemsDel = getMTOForIso(v.iso) || [];
+      const needed45del = mtoItemsDel.filter(m =>
+        (m.weldType||'').toUpperCase() === 'ELBOW45' &&
+        (m.popis||'').includes(roz)
+      ).reduce((s,m) => s + (parseFloat(m.mn)||1), 0);
+      if (needed45del > 0) {
+        realExtra = Math.max(0, Math.round((gained45 + grp.qty45 - needed45del) * 10000) / 10000);
+      }
+    }
+
     if (realExtra <= 0) return;
 
     const e45idx = items.findIndex(it2 =>
