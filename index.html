@@ -2780,6 +2780,9 @@ function renderZoznam() {
         const fromDlzka = (parseFloat(l.dlzka)||0) / 1000;
         const fromVydQty = parseFloat(l.vydQty)||0;
         qty = fromDlzka > 0 ? fromDlzka : fromVydQty;
+      } else if (l.rezanyNa) {
+        // ELBOW90 rozrezaný → 1× ELBOW90 = 2× ELBOW45
+        qty = (parseFloat(l.vydQty)||1) * 2;
       } else {
         qty = parseFloat(l.vydQty)||1;
       }
