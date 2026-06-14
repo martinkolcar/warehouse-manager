@@ -1875,11 +1875,44 @@ function saveVydajka(mode) {
   if (vydEditIdx !== null) {
     // ─── EDITÁCIA: vráť staré množstvá, odčítaj nové ───
     const stara = vydajkyList[vydEditIdx];
-    // Vráť staré
+    // Vráť staré vydané množstvá
     (stara.lines||[]).forEach(l => {
       const found = items.findIndex(it => it.typ===l.typ && it.rozmer===l.rozmer && it.tavba===l.tavba);
       if (found >= 0) {
         items[found].zostatok = Math.round(((parseFloat(items[found].zostatok)||0) + (parseFloat(l.vydQty)||0)) * 10000) / 10000;
+      }
+    });
+    // Vráť extra ELBOW45 ktoré pribudli z rezania (odčítaj ich)
+    const staraRozmerGroups = {};
+    (stara.lines||[]).forEach(l => {
+      const wt = classifySkladTyp(l.typ);
+      if (wt !== 'ELBOW90' && wt !== 'ELBOW45') return;
+      const roz = (l.rozmer||'').replace(/mm$/i,'').trim();
+      if (!staraRozmerGroups[roz]) staraRozmerGroups[roz] = {qty90:0, qty45:0, ref:null};
+      if (wt === 'ELBOW90') { staraRozmerGroups[roz].qty90 += parseFloat(l.vydQty)||0; staraRozmerGroups[roz].ref = l; }
+      if (wt === 'ELBOW45') staraRozmerGroups[roz].qty45 += parseFloat(l.vydQty)||0;
+    });
+    Object.keys(staraRozmerGroups).forEach(roz => {
+      const grp = staraRozmerGroups[roz];
+      if (grp.qty90 <= 0) return;
+      let realExtra = (grp.ref && grp.ref.extra45Saved) ? grp.ref.extra45Saved : 0;
+      if (!realExtra) {
+        const gained45 = grp.qty90 * 2;
+        const mtoItemsOld = getMTOForIso(stara.iso) || [];
+        const needed45old = mtoItemsOld.filter(m =>
+          (m.weldType||'').toUpperCase() === 'ELBOW45' && (m.popis||'').includes(roz)
+        ).reduce((s,m) => s + (parseFloat(m.mn)||1), 0);
+        if (needed45old > 0) realExtra = Math.max(0, gained45 + grp.qty45 - needed45old);
+      }
+      if (realExtra <= 0) return;
+      const e45idx = items.findIndex(it2 =>
+        classifySkladTyp(it2.typ) === 'ELBOW45' &&
+        (it2.rozmer||'').replace(/mm$/i,'').trim() === roz
+      );
+      if (e45idx >= 0) {
+        items[e45idx].zostatok = Math.max(0,
+          Math.round(((parseFloat(items[e45idx].zostatok)||0) - realExtra) * 10000) / 10000
+        );
       }
     });
     // Odčítaj nové
@@ -2905,7 +2938,10 @@ function deleteVydajka(idx) {
       if (needed45del > 0) {
         realExtra = Math.max(0, Math.round((gained45 + grp.qty45 - needed45del) * 10000) / 10000);
       }
+      console.log('DELETE fallback:', {roz, gained45, grp_qty45: grp.qty45, needed45del, realExtra});
     }
+
+    console.log('DELETE realExtra:', realExtra, 'ref.extra45Saved:', grp.ref && grp.ref.extra45Saved);
 
     if (realExtra <= 0) return;
 
