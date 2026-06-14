@@ -1166,7 +1166,8 @@ function classifyWeldType(popis) {
   var p = popis.toUpperCase();
   if (p.includes('RÚRA') || p.includes('RURA')) return 'PIPE';
   if ((p.includes('OBLÚK') || p.includes('OBLUK') || p.includes('KOLENO')) && p.includes('45')) return 'ELBOW45';
-  if (p.includes('OBLÚK') || p.includes('OBLUK') || p.includes('KOLENO')) return 'ELBOW';
+  if ((p.includes('OBLÚK') || p.includes('OBLUK') || p.includes('KOLENO')) && p.includes('90')) return 'ELBOW90';
+  if (p.includes('OBLÚK') || p.includes('OBLUK') || p.includes('KOLENO')) return 'ELBOW90';
   if (p.includes('T-KUS') || p.includes('TKUS')) return 'TEE';
   if (p.includes('ODBOČKA')) return 'BRANCH';
   if (p.includes('REDUKCI')) return 'REDUCER';
@@ -1972,44 +1973,44 @@ function odcitajSklad() {
 
     // Koľko ELBOW45 získame z rezania
     const gained45 = grp.qty90 * 2;
-    // Koľko ELBOW45 bolo potrebných z MTO pre tento rozmer
+
+    // Extra ELBOW45 = gained z rezania - (potreba z MTO - vydané priamo zo skladu)
+    // Skús najprv z MTO
     let needed45 = mtoItems.filter(m =>
       (m.weldType||'').toUpperCase() === 'ELBOW45' &&
       (m.popis||'').includes(roz)
     ).reduce((s,m) => s + (parseFloat(m.mn)||1), 0);
 
-    // Ak MTO nie je načítané alebo nič nenašlo - vypočítaj z vydajky
-    // needed45 = gained45 + qty45 (všetko vydané ide na izometriu, nič extra)
-    // To znamená extra = 0 ak MTO nepoznáme - bezpečný fallback
-    if (needed45 <= 0) {
-      // Bez MTO nevieme koľko ostalo - pridáme 0 (bezpečné)
-      return;
+    let extra45;
+    if (needed45 > 0) {
+      // Vieme z MTO: extra = gained + vydané priamo - potreba
+      extra45 = Math.round((gained45 + grp.qty45 - needed45) * 10000) / 10000;
+      console.log('✂️ Rezanie kalkulácia:', {roz, gained45, grp_qty45: grp.qty45, needed45, extra45});
+    } else {
+      // MTO nie je načítané alebo nenašlo ELBOW45 pre tento rozmer
+      console.warn('⚠️ MTO nedostupné pre výpočet extra ELBOW45!', {
+        vydIso, roz,
+        mtoLoaded: window.mtoData && window.mtoData.loaded,
+        mtoCount: window.mtoData && window.mtoData.materials && window.mtoData.materials.length,
+        mtoItems: mtoItems.length
+      });
+      extra45 = 0;
     }
-
-    // Extra = gained z rezania + vydané priamo - potreba z MTO
-    const extra45 = Math.round((gained45 + grp.qty45 - needed45) * 10000) / 10000;
 
     if (extra45 <= 0) return;
 
-    // Ulož extra45 do vydajky line pre prípad mazania
-    grp.it90.extra45Saved = extra45;
-    // Aktualizuj aj v vydLines (pre buildVydajkaObj)
-    vydLines.forEach(l => {
-      if (classifySkladTyp(l.typ) === 'ELBOW90' &&
-          (l.rozmer||'').replace(/mm$/i,'').trim() === roz) {
-        l.extra45Saved = extra45;
-      }
-    });
-
-    // Nájdi ELBOW45 v sklade alebo vytvor
+    // Zaznamenam stav ELBOW45 PRED pridaním
     const ref = grp.it90;
     const e45idx = items.findIndex(it2 =>
       classifySkladTyp(it2.typ) === 'ELBOW45' &&
       (it2.rozmer||'').replace(/mm$/i,'').trim() === roz
     );
+    const e45before = e45idx >= 0 ? (parseFloat(items[e45idx].zostatok)||0) : 0;
+
+    // Pridaj extra do skladu
     if (e45idx >= 0) {
-      items[e45idx].zostatok = Math.round(((parseFloat(items[e45idx].zostatok)||0) + extra45) * 10000) / 10000;
-    } else if (ref) {
+      items[e45idx].zostatok = Math.round((e45before + extra45) * 10000) / 10000;
+    } else if (extra45 > 0 && ref) {
       items.push({
         typ: (ref.typ||'').replace(/90/gi,'45').replace(/90°/gi,'45°'),
         rozmer: ref.rozmer, material: ref.material,
@@ -2019,6 +2020,19 @@ function odcitajSklad() {
         zdroj_dl: 'KONVERZIA', datum: new Date().toISOString().split('T')[0]
       });
     }
+
+    // Zaznamenam stav PO pridaní - skutočný rozdiel
+    const e45after = e45idx >= 0 ? (parseFloat(items[e45idx].zostatok)||0) : extra45;
+    const actualAdded = Math.round((e45after - e45before) * 10000) / 10000;
+
+    // Ulož skutočne pridané množstvo do vydajky
+    vydLines.forEach(l => {
+      if (classifySkladTyp(l.typ) === 'ELBOW90' &&
+          (l.rozmer||'').replace(/mm$/i,'').trim() === roz) {
+        l.extra45Saved = actualAdded;
+      }
+    });
+    grp.it90.extra45Saved = actualAdded;
   });
 }
 
@@ -2877,17 +2891,18 @@ function deleteVydajka(idx) {
     // Jednoducho: extra = gained45 - potreba_z_rezania
     // Ale potreba_z_rezania = gained45 - extra = ?
     // RIEŠENIE: uložíme extra45 do vydajky pri save a tu ho použijeme
-    const savedExtra = grp.ref && grp.ref.extra45Saved;
-    if (savedExtra > 0) {
-      const e45idx = items.findIndex(it2 =>
-        classifySkladTyp(it2.typ) === 'ELBOW45' &&
-        (it2.rozmer||'').replace(/mm$/i,'').trim() === roz
+    // extra45Saved = skutočné extra ELBOW45 ktoré pribudli do skladu
+    const realExtra = (grp.ref && grp.ref.extra45Saved) ? grp.ref.extra45Saved : 0;
+    if (realExtra <= 0) return;
+
+    const e45idx = items.findIndex(it2 =>
+      classifySkladTyp(it2.typ) === 'ELBOW45' &&
+      (it2.rozmer||'').replace(/mm$/i,'').trim() === roz
+    );
+    if (e45idx >= 0) {
+      items[e45idx].zostatok = Math.max(0,
+        Math.round(((parseFloat(items[e45idx].zostatok)||0) - realExtra) * 10000) / 10000
       );
-      if (e45idx >= 0) {
-        items[e45idx].zostatok = Math.max(0,
-          Math.round(((parseFloat(items[e45idx].zostatok)||0) - savedExtra) * 10000) / 10000
-        );
-      }
     }
   });
 
