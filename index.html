@@ -2803,6 +2803,18 @@ function renderZoznam() {
     let chybaPocet = 0;
     const chybaDetail = [];
     const vydaneDetail = [];
+
+    // Zisti rezané ELBOW90 pre túto izometriu
+    const rezaneInfo = {}; // rozmer → {qty90, extra45}
+    lines.forEach(l => {
+      if (l.rezanyNa === 'ELBOW45') {
+        const roz = (l.rozmer||'').replace(/mm$/i,'').trim();
+        if (!rezaneInfo[roz]) rezaneInfo[roz] = {qty90:0, extra45:0};
+        rezaneInfo[roz].qty90 += parseFloat(l.vydQty)||0;
+        rezaneInfo[roz].extra45 += parseFloat(l.extra45Saved)||0;
+      }
+    });
+
     Object.keys(mtoMap).forEach(k => {
       const potreba = mtoMap[k];
       const vydane  = vydaneMap[k]||0;
@@ -2814,7 +2826,15 @@ function renderZoznam() {
         chybaPocet++;
         chybaDetail.push({ typ, rozmer, chyba });
       } else if (vydane > 0) {
-        vydaneDetail.push({ typ, rozmer, qty: Math.round(vydane*100)/100 });
+        // Ak je to ELBOW45 pokryté rezaním
+        const rez = typ === 'ELBOW45' && rezaneInfo[rozmer];
+        vydaneDetail.push({
+          typ, rozmer,
+          qty: Math.round(potreba*100)/100, // koľko ide na trasu (z MTO)
+          qty90: rez ? rezaneInfo[rozmer].qty90 : 0,
+          extra45: rez ? rezaneInfo[rozmer].extra45 : 0,
+          isRezane: !!rez
+        });
       }
     });
 
@@ -2865,7 +2885,13 @@ function renderZoznam() {
         <strong style="color:#1a1a2e">${iso}</strong>
         ${(chybaDetail.length||vydaneDetail.length) ? '<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:3px">' +
           chybaDetail.map(c=>`<span style="font-size:10px;background:#fee2e2;color:#dc2626;padding:1px 6px;border-radius:3px">${c.typ} ${c.rozmer}: <b>${c.chyba}</b></span>`).join('') +
-          vydaneDetail.map(c=>`<span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:3px">${c.typ} ${c.rozmer}: <b>${c.qty}</b></span>`).join('') +
+          vydaneDetail.map(c => {
+            if (c.isRezane && c.qty90 > 0) {
+              const extra = c.extra45 > 0 ? ` +${c.extra45}× sklad` : '';
+              return `<span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:3px">${c.qty}× ${c.typ} — ${c.qty90}× ELBOW90 ✂️${extra}</span>`;
+            }
+            return `<span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:3px">${c.typ} ${c.rozmer}: <b>${c.qty}</b></span>`;
+          }).join('') +
           '</div>' : ''}
       </td>
       <td style="padding:8px 10px;text-align:center">
