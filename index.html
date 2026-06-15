@@ -2192,8 +2192,10 @@ async function zapisHeatyDoWeldPro(vydajka) {
       var tavby = tavbyMap[key];
       var heat1 = tavby.size === 1 ? Array.from(tavby)[0] : '';
 
+      // Normalizuj wbTyp pre porovnanie (ELBOW45/ELBOW90 → ELBOW v WeldBook)
+      var wbTypBase = wbTyp.replace(/45$|90$/, '');
       // item1
-      if ((r.item1||'').toUpperCase().includes(wbTyp) && (r.dimension1||'').toString() === dim) {
+      if (((r.item1||'').toUpperCase().includes(wbTyp) || (r.item1||'').toUpperCase().includes(wbTypBase)) && (r.dimension1||'').toString() === dim) {
         if (tavby.size === 1) {
           if (r.heatNr1 !== heat1) { r.heatNr1 = heat1; changed = true; }
         } else if (!r.dateWelding && r.heatNr1) {
@@ -2201,7 +2203,7 @@ async function zapisHeatyDoWeldPro(vydajka) {
         }
       }
       // item2
-      if ((r.item2||'').toUpperCase().includes(wbTyp) && (r.dimension2||'').toString() === dim) {
+      if (((r.item2||'').toUpperCase().includes(wbTyp) || (r.item2||'').toUpperCase().includes(wbTypBase)) && (r.dimension2||'').toString() === dim) {
         if (tavby.size === 1) {
           if (r.heatNr2 !== heat1) { r.heatNr2 = heat1; changed = true; }
         } else if (!r.dateWelding && r.heatNr2) {
