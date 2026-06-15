@@ -2277,12 +2277,7 @@ async function clearHeatyZWeldBookuAll(vydajka) {
     await window.weldproFS.collection('weldbook').doc(wbDocId).set({
       chunks: chunks.length, size: json.length, date: new Date().toISOString()
     }, {merge: true});
-    if (window.weldproFS) {
-      window.weldproFS.collection('weldbook_signal').doc('latest').set({
-        by: 'warehouse', part: 'ALL', iso: isoName,
-        at: new Date().toISOString(), sessionId: 'warehouse-' + Date.now()
-      });
-    }
+    // Signal NEposiela - čakáme na zapisHeatyDoWeldPro ktorý pošle signal po zápise nových hodnôt
     console.log('✅ WeldBook heaty vymazané pre:', isoName);
   } catch(e) { console.warn('clearAll error:', e); }
 }
