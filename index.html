@@ -2886,9 +2886,15 @@ function renderZoznam() {
         ${(chybaDetail.length||vydaneDetail.length) ? '<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:3px">' +
           chybaDetail.map(c=>`<span style="font-size:10px;background:#fee2e2;color:#dc2626;padding:1px 6px;border-radius:3px">${c.typ} ${c.rozmer}: <b>${c.chyba}</b></span>`).join('') +
           vydaneDetail.map(c => {
-            if (c.isRezane && c.qty90 > 0) {
+            if (c.isRezane) {
+              // Zisti koľko ELBOW45 bolo vydaných priamo zo skladu
+              const direct45 = lines.filter(l =>
+                classifySkladTyp(l.typ) === 'ELBOW45' &&
+                (l.rozmer||'').replace(/mm$/i,'').trim() === c.rozmer
+              ).reduce((s,l) => s + (parseFloat(l.vydQty)||0), 0);
               const extra = c.extra45 > 0 ? ` +${c.extra45}× sklad` : '';
-              return `<span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:3px">${c.qty}× ${c.typ} — ${c.qty90}× ELBOW90 ✂️${extra}</span>`;
+              const directPart = direct45 > 0 ? `${direct45}× ELBOW45 + ` : '';
+              return `<span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:3px">${c.qty}× ELBOW45 — ${directPart}${c.qty90}× ELBOW90 ✂️${extra}</span>`;
             }
             return `<span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:3px">${c.typ} ${c.rozmer}: <b>${c.qty}</b></span>`;
           }).join('') +
