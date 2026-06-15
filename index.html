@@ -2115,13 +2115,18 @@ function odcitajSklad() {
 
 // ─── ZÁPIS / MAZANIE HEAT VO WELDPRO WELDBOOK ────────────────────────────────
 async function getWbDocId() {
-  // Zisti aktívny WeldBook dokument z posledného signalu
+  // Zisti všetky dokumenty v weldbook collection a nájdi správny
   try {
-    var sig = await window.weldproFS.collection('weldbook_signal').doc('latest').get();
-    if (sig.exists && sig.data().part && sig.data().part !== 'ALL') {
-      return sig.data().part + '_main';
-    }
-  } catch(e) {}
+    var snap = await window.weldproFS.collection('weldbook').get();
+    var docs = snap.docs.map(function(d){return d.id;});
+    console.log('📚 WeldBook docs:', docs);
+    // Ak existuje len weldbook_main → použij ho
+    if (docs.length === 1) return docs[0];
+    // Ak existuje viac → nájdi podľa izometrie (skip)
+    // Preferuj non-ALL docs
+    var nonMain = docs.filter(function(d){return d !== 'weldbook_main';});
+    if (nonMain.length === 1) return nonMain[0];
+  } catch(e) { console.warn('getWbDocId err:', e); }
   return 'weldbook_main';
 }
 
