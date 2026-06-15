@@ -2154,6 +2154,7 @@ async function zapisHeatyDoWeldPro(vydajka) {
              parseFloat(it.zostatok) > 0;
     });
     var tavba = (skladItem && skladItem.tavba) ? skladItem.tavba : l.tavba;
+    console.log('🔍 Tavba:', l.typ, l.rozmer, '→', tavba, '| sklad:', skladItem ? skladItem.tavba : 'nenašlo');
     if (!tavba) return;
 
     if (!tavbyMap[key]) tavbyMap[key] = new Set();
