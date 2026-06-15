@@ -2766,7 +2766,9 @@ function renderZoznam() {
 
     const vydaneMap = {};
     lines.forEach(l => {
-      if (!ZVARACIE_TYPY.includes((l.typ||'').toUpperCase())) return;
+      // Klasifikuj typ - l.typ môže byť anglický názov (napr. 'Elbow Type A, 3D')
+      const wtCheck = classifySkladTyp(l.typ);
+      if (!wtCheck || !ZVARACIE_TYPY.includes(wtCheck)) return;
       // Ak je rozrezaný (napr. ELBOW90→ELBOW45), počítaj ako cieľový typ
       let wt;
       if (l.rezanyNa) {
