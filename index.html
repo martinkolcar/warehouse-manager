@@ -3007,12 +3007,18 @@ function renderZoznam() {
       }
     }
 
+    // Ak je filter tavby - filtruj štítky podľa tavby
+    const vydaneDetailFiltered = fTavba
+      ? vydaneDetail.filter(c => (c.tavba||'').toLowerCase().includes(fTavba))
+      : vydaneDetail;
+    const chybaDetailFiltered = fTavba ? [] : chybaDetail; // pri filter tavby schovaj cervene
+
     return `<tr style="border-bottom:1px solid #eef0f4" onmouseover="this.style.background='#f5f7ff'" onmouseout="this.style.background=''">
       <td style="padding:8px 10px;font-family:monospace;font-size:11px;max-width:260px">
         <strong style="color:#1a1a2e">${iso}</strong>
-        ${(chybaDetail.length||vydaneDetail.length) ? '<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:3px">' +
-          chybaDetail.map(c=>`<span style="font-size:10px;background:#fee2e2;color:#dc2626;padding:1px 6px;border-radius:3px">${c.typ} ${c.rozmer}: <b>${c.chyba}</b></span>`).join('') +
-          vydaneDetail.map(c => {
+        ${(chybaDetailFiltered.length||vydaneDetailFiltered.length) ? '<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:3px">' +
+          chybaDetailFiltered.map(c=>`<span style="font-size:10px;background:#fee2e2;color:#dc2626;padding:1px 6px;border-radius:3px">${c.typ} ${c.rozmer}: <b>${c.chyba}</b></span>`).join('') +
+          vydaneDetailFiltered.map(c => {
             if (c.isRezane) {
               // Zisti koľko ELBOW45 bolo vydaných priamo zo skladu
               const direct45 = lines.filter(l =>
