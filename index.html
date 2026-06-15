@@ -2125,7 +2125,13 @@ async function zapisHeatyDoWeldPro(vydajka) {
     var dim = (l.rozmer||'').split('x')[0];
     var key = wbTyp + '||' + dim;
 
-    var tavba = l.tavba;
+    // Použi aktuálnu tavbu zo skladu ak existuje, inak z vydajky
+    var skladItem = items.find(function(it) {
+      return (it.typ||'').toLowerCase() === (l.typ||'').toLowerCase() &&
+             (it.rozmer||'') === (l.rozmer||'') &&
+             parseFloat(it.zostatok) > 0;
+    });
+    var tavba = (skladItem && skladItem.tavba) ? skladItem.tavba : l.tavba;
     if (!tavba) return;
 
     if (!tavbyMap[key]) tavbyMap[key] = new Set();
@@ -2837,7 +2843,7 @@ function renderZoznam() {
       (!fTyp    || (l.typ||'').includes(fTyp)) &&
       (!fRozmer || l.rozmer === fRozmer) &&
       (!fMat    || (l.material||'') === fMat) &&
-      (!fTavba  || (l.tavba||'').toLowerCase().includes(fTavba))
+      (!fTavba  || (l.tavba||'').toLowerCase().includes(fTavba) || (() => { const si = items.find(it => (it.typ||'').toLowerCase()===(l.typ||'').toLowerCase() && (it.rozmer||'')===(l.rozmer||'')); return si && (si.tavba||'').toLowerCase().includes(fTavba); })())
     ) : null;
     if (hasItemFilter && matched.length === 0) return '';
 
@@ -2921,12 +2927,19 @@ function renderZoznam() {
       } else if (vydane > 0) {
         // Ak je to ELBOW45 pokryté rezaním
         const rez = typ === 'ELBOW45' && rezaneInfo[rozmer];
+        // Nájdi tavbu z vydajky pre tento typ+rozmer
+        const tavbaLine = lines.find(l => {
+          const wt = classifySkladTyp(l.typ);
+          const lroz = (l.rozmer||'').replace(/mm$/i,'').trim();
+          return wt === typ && lroz === rozmer && l.tavba;
+        });
         vydaneDetail.push({
           typ, rozmer,
-          qty: Math.round(potreba*100)/100, // koľko ide na trasu (z MTO)
+          qty: Math.round(potreba*100)/100,
           qty90: rez ? rezaneInfo[rozmer].qty90 : 0,
           extra45: rez ? rezaneInfo[rozmer].extra45 : 0,
-          isRezane: !!rez
+          isRezane: !!rez,
+          tavba: tavbaLine ? tavbaLine.tavba : '',
         });
       }
     });
@@ -2989,7 +3002,7 @@ function renderZoznam() {
               const directPart = direct45 > 0 ? `${direct45}× ELBOW45 + ` : '';
               return `<span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:3px">${c.qty}× ELBOW45 — ${directPart}${c.qty90}× ELBOW90 ✂️${extra}</span>`;
             }
-            return `<span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:3px">${c.typ} ${c.rozmer}: <b>${c.qty}</b></span>`;
+            return `<span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:3px">${c.typ} ${c.rozmer}: <b>${c.qty}</b>${c.tavba?' · '+c.tavba:''}</span>`;
           }).join('') +
           '</div>' : ''}
       </td>
