@@ -1935,7 +1935,12 @@ function saveVydajka(mode) {
 
   // Zapíš/aktualizuj heaty vo WeldPro
   var _vydObj = vydajkyList[vydEditIdx !== null ? vydEditIdx : vydajkyList.length-1];
-  if (_vydObj) zapisHeatyDoWeldPro(_vydObj);
+  if (_vydObj) {
+    // Pri editácii najprv vymaž staré heaty a potom zapíš nové
+    clearHeatyZWeldBooku(_vydObj).then(function() {
+      zapisHeatyDoWeldPro(_vydObj);
+    });
+  }
 
   if (mode === 'pdf') openVydNahladFromData(vydajkyList[vydEditIdx !== null ? vydEditIdx : vydajkyList.length-1]);
 
