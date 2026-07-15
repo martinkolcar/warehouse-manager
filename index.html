@@ -1511,7 +1511,21 @@ function renderVydMatList() {
       var typeColors = {PIPE:'#dbeafe',ELBOW:'#dcfce7',TEE:'#fef9c3',REDUCER:'#fce7f3',FLANGE:'#ede9fe',CAP:'#ffedd5',VALVE:'#fee2e2',BRANCH:'#ccfbf1'};
       var bg = wt ? (typeColors[wt]||'#f9fafb') : '#f1f5f9';
       var label = wt || (m.kategoria||'').toUpperCase().substring(0,8) || 'INÉ';
-      html += '<div onclick="addMTOToVydajka(' + idx + ')" style="padding:8px;border-bottom:1px solid #e5e7eb;cursor:pointer;display:flex;align-items:center;gap:8px;background:white;border-radius:4px;margin-bottom:4px">';
+
+      // Skontroluj či máme v sklade
+      var rozmer = dims.size || '';
+      var vSklade = wt ? items.some(function(it) {
+        return classifySkladTyp(it.typ) === wt &&
+               (it.rozmer||'').replace(/mm$/i,'').trim() === rozmer.replace(/mm$/i,'').trim() &&
+               parseFloat(it.zostatok) > 0;
+      }) : false;
+
+      var canVydat = wt && vSklade;
+      var rowStyle = canVydat
+        ? 'padding:8px;border-bottom:1px solid #e5e7eb;cursor:pointer;display:flex;align-items:center;gap:8px;background:white;border-radius:4px;margin-bottom:4px'
+        : 'padding:8px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:8px;background:#f9fafb;border-radius:4px;margin-bottom:4px;opacity:0.6';
+
+      html += '<div ' + (canVydat ? 'onclick="addMTOToVydajka(' + idx + ')"' : '') + ' style="' + rowStyle + '">';
       html += '<span style="background:'+bg+';padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700;min-width:60px;text-align:center">'+label+'</span>';
       html += '<div style="flex:1;font-size:12px">';
       html += '<div><strong>DN'+getWeldableDN(m.dn)+'</strong>';
@@ -1520,7 +1534,13 @@ function renderVydMatList() {
       html += '</div>';
       html += '<div style="color:#9ca3af;font-size:10px">POZ.'+m.poz+' &nbsp;·&nbsp; '+m.mn+' &nbsp;·&nbsp; <span style="color:#555">'+m.popis.substring(0,50)+'</span></div>';
       html += '</div>';
-      html += wt ? '<span style="font-size:10px;color:#10b981;font-weight:600">🔧 vydať</span>' : '<span style="font-size:10px;color:#94a3b8">vydať</span>';
+      if (canVydat) {
+        html += '<span style="font-size:10px;color:#10b981;font-weight:600">🔧 vydať</span>';
+      } else if (wt) {
+        html += '<span style="font-size:10px;color:#dc2626;font-weight:600">❌ nie v sklade</span>';
+      } else {
+        html += '<span style="font-size:10px;color:#94a3b8">—</span>';
+      }
       html += '</div>';
     });
     html += '</div>';
@@ -1929,24 +1949,22 @@ function saveVydajka(mode) {
     const stara = vydajkyList[vydEditIdx];
     // Vráť staré vydané množstvá
     (stara.lines||[]).forEach(l => {
-      if (l.fromMTO) {
-        // Položka z MTO - hľadaj podľa weldType a rozmeru
-        const wt = (l.typ||'').toUpperCase();
+      const qty = parseFloat(l.vydQty)||0;
+      if (qty <= 0) return;
+      // Najprv skús presné hľadanie (typ + rozmer + tavba)
+      let found = items.findIndex(it => it.typ===l.typ && it.rozmer===l.rozmer && (it.tavba||'')===(l.tavba||''));
+      // Ak nenájde (MTO položka má typ=ELBOW45), hľadaj podľa classifySkladTyp + rozmer
+      if (found < 0) {
+        const wt = classifySkladTyp(l.typ) || l.typ.toUpperCase();
         const roz = (l.rozmer||'').replace(/mm$/i,'').trim();
-        const found = items.findIndex(it => {
+        found = items.findIndex(it => {
           const itWt = classifySkladTyp(it.typ);
           const itRoz = (it.rozmer||'').replace(/mm$/i,'').trim();
           return itWt === wt && itRoz === roz;
         });
-        if (found >= 0) {
-          items[found].zostatok = Math.round(((parseFloat(items[found].zostatok)||0) + (parseFloat(l.vydQty)||0)) * 10000) / 10000;
-        }
-      } else {
-        // Položka zo skladu - hľadaj presne
-        const found = items.findIndex(it => it.typ===l.typ && it.rozmer===l.rozmer && it.tavba===l.tavba);
-        if (found >= 0) {
-          items[found].zostatok = Math.round(((parseFloat(items[found].zostatok)||0) + (parseFloat(l.vydQty)||0)) * 10000) / 10000;
-        }
+      }
+      if (found >= 0) {
+        items[found].zostatok = Math.round(((parseFloat(items[found].zostatok)||0) + qty) * 10000) / 10000;
       }
     });
     // Vráť extra ELBOW45 ktoré pribudli z rezania (odčítaj ich)
@@ -2408,6 +2426,7 @@ function buildVydajkaObj(datum) {
       typ: l.typ, rozmer: l.rozmer, material: l.material,
       norma: l.norma, tavba: l.tavba, jednotka: l.jednotka,
       isPipe: l.isPipe || false,
+      fromMTO: l.fromMTO || false,
       vydQty: l.isPipe ? Math.round((parseFloat(l.dlzka)||0)/1000*10000)/10000 : (parseFloat(l.vydQty)||0),
       dlzka: l.dlzka||'', spCislo: l.spCislo||'',
       extra45Saved: l.extra45Saved||0,
@@ -3097,22 +3116,20 @@ function deleteVydajka(idx) {
 
   // Vráť vydané množstvá do skladu
   (v.lines||[]).forEach(l => {
-    if (l.fromMTO) {
-      const wt = (l.typ||'').toUpperCase();
+    const qty = parseFloat(l.vydQty)||0;
+    if (qty <= 0) return;
+    let found = items.findIndex(it => it.typ===l.typ && it.rozmer===l.rozmer && (it.tavba||'')===(l.tavba||''));
+    if (found < 0) {
+      const wt = classifySkladTyp(l.typ) || l.typ.toUpperCase();
       const roz = (l.rozmer||'').replace(/mm$/i,'').trim();
-      const found = items.findIndex(it => {
+      found = items.findIndex(it => {
         const itWt = classifySkladTyp(it.typ);
         const itRoz = (it.rozmer||'').replace(/mm$/i,'').trim();
         return itWt === wt && itRoz === roz;
       });
-      if (found >= 0) {
-        items[found].zostatok = Math.round(((parseFloat(items[found].zostatok)||0) + (parseFloat(l.vydQty)||0)) * 10000) / 10000;
-      }
-    } else {
-      const found = items.findIndex(it => it.typ===l.typ && it.rozmer===l.rozmer && it.tavba===l.tavba);
-      if (found >= 0) {
-        items[found].zostatok = Math.round(((parseFloat(items[found].zostatok)||0) + (parseFloat(l.vydQty)||0)) * 10000) / 10000;
-      }
+    }
+    if (found >= 0) {
+      items[found].zostatok = Math.round(((parseFloat(items[found].zostatok)||0) + qty) * 10000) / 10000;
     }
   });
 
