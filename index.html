@@ -1147,11 +1147,15 @@ function uploadMTOExcel() {
 
           window.mtoData.materials.push({
             subor, izometria, kategoria, poz, dn, popis, mn, hmotn,
-            weldType
+            weldType, isoKey
           });
 
-          // Použi IZOMETRIA ako kľúč (1215-BA/NM-200-CFX-PA1H3)
-          var isoKey = izometria.trim();
+          // Kľúč = IZOMETRIA + list suffix zo SÚBOR (napr. 11-NM-350-CFX-PA1H3_1z3)
+          var listSuffix = '';
+          var suborBez = subor.replace(/\.(dxf|pdf|dwg)$/i,'').trim();
+          var suffixMatch = suborBez.match(/(_\d+z\d+)$/i);
+          if (suffixMatch) listSuffix = suffixMatch[1];
+          var isoKey = izometria.trim() + listSuffix;
           if (isoKey) isoSet[isoKey] = true;
         });
 
@@ -1258,9 +1262,9 @@ function updateMTOBadge() {
 
 function getMTOForIso(isoName) {
   if (!window.mtoData.loaded) return [];
-  var isoKey = (isoName||'').trim().toLowerCase();
+  var key = (isoName||'').trim().toLowerCase();
   return window.mtoData.materials.filter(function(m) {
-    return (m.izometria||'').trim().toLowerCase() === isoKey;
+    return (m.isoKey||'').trim().toLowerCase() === key;
   });
 }
 
@@ -2878,7 +2882,7 @@ function renderZoznam() {
     // MTO porovnanie - zvaracie položky
     const mtoItems = (window.mtoData && window.mtoData.loaded)
       ? window.mtoData.materials.filter(m => {
-          return (m.izometria||'').trim().toLowerCase() === iso.trim().toLowerCase() 
+          return (m.isoKey||'').trim().toLowerCase() === iso.trim().toLowerCase()
               && ZVARACIE_TYPY.includes((m.weldType||'').toUpperCase());
         })
       : [];
