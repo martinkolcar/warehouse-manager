@@ -1150,8 +1150,8 @@ function uploadMTOExcel() {
             weldType
           });
 
-          // Použi SÚBOR bez prípony ako kľúč izometrie (obsahuje _1z3 atď.)
-          var isoKey = subor ? subor.replace(/\.(dxf|pdf|dwg)$/i, '').trim() : izometria;
+          // Použi IZOMETRIA ako kľúč (1215-BA/NM-200-CFX-PA1H3)
+          var isoKey = izometria.trim();
           if (isoKey) isoSet[isoKey] = true;
         });
 
@@ -1258,10 +1258,9 @@ function updateMTOBadge() {
 
 function getMTOForIso(isoName) {
   if (!window.mtoData.loaded) return [];
-  var isoKey = (isoName||'').replace(/\.(dxf|pdf|dwg)$/i,'').trim().toLowerCase();
+  var isoKey = (isoName||'').trim().toLowerCase();
   return window.mtoData.materials.filter(function(m) {
-    var src = (m.subor||'').replace(/\.(dxf|pdf|dwg)$/i,'').trim().toLowerCase();
-    return src === isoKey;
+    return (m.izometria||'').trim().toLowerCase() === isoKey;
   });
 }
 
@@ -2841,7 +2840,7 @@ function renderZoznam() {
   // Zoskup vydajky podľa izometrie
   const byIso = {};
   vydajkyList.forEach((v, idx) => {
-    const iso = (v.iso||'').replace(/\.[^.]+$/, '');
+    const iso = (v.iso||'');
     if (!byIso[iso]) byIso[iso] = { iso, vydajky: [], lines: [] };
     byIso[iso].vydajky.push({ v, idx });
     (v.lines||[]).forEach(l => byIso[iso].lines.push(l));
@@ -2879,10 +2878,8 @@ function renderZoznam() {
     // MTO porovnanie - zvaracie položky
     const mtoItems = (window.mtoData && window.mtoData.loaded)
       ? window.mtoData.materials.filter(m => {
-          const mSubor = (m.subor||'').replace(/\.[^.]+$/,'').replace(/[_-]/g,'').toLowerCase();
-          const mIso   = (m.izometria||'').replace(/[_-]/g,'').toLowerCase();
-          const isoN   = iso.replace(/[_-]/g,'').toLowerCase();
-          return (mSubor === isoN || mIso === isoN) && ZVARACIE_TYPY.includes((m.weldType||'').toUpperCase());
+          return (m.izometria||'').trim().toLowerCase() === iso.trim().toLowerCase() 
+              && ZVARACIE_TYPY.includes((m.weldType||'').toUpperCase());
         })
       : [];
 
