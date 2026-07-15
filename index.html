@@ -1267,7 +1267,14 @@ function getMTOForIso(isoName) {
   if (!window.mtoData.loaded) return [];
   var key = (isoName||'').trim().toLowerCase();
   return window.mtoData.materials.filter(function(m) {
-    return (m.isoKey||'').trim().toLowerCase() === key;
+    // Ak má uložený isoKey, použi ho
+    if (m.isoKey) return m.isoKey.trim().toLowerCase() === key;
+    // Inak vypočítaj za behu
+    var suborBez = (m.subor||'').replace(/\.(dxf|pdf|dwg)$/i,'').trim();
+    var suffixMatch = suborBez.match(/(_\d+z\d+)$/i);
+    var listSuffix = suffixMatch ? suffixMatch[1] : '';
+    var computed = ((m.izometria||'').trim() + listSuffix).toLowerCase();
+    return computed === key;
   });
 }
 
@@ -2885,8 +2892,12 @@ function renderZoznam() {
     // MTO porovnanie - zvaracie položky
     const mtoItems = (window.mtoData && window.mtoData.loaded)
       ? window.mtoData.materials.filter(m => {
-          return (m.isoKey||'').trim().toLowerCase() === iso.trim().toLowerCase()
-              && ZVARACIE_TYPY.includes((m.weldType||'').toUpperCase());
+          const key = iso.trim().toLowerCase();
+          if (m.isoKey) return m.isoKey.trim().toLowerCase() === key && ZVARACIE_TYPY.includes((m.weldType||'').toUpperCase());
+          const suborBez = (m.subor||'').replace(/\.[^.]+$/,'').trim();
+          const sfx = (suborBez.match(/(_\d+z\d+)$/i)||['',''])[1];
+          const computed = ((m.izometria||'').trim() + sfx).toLowerCase();
+          return computed === key && ZVARACIE_TYPY.includes((m.weldType||'').toUpperCase());
         })
       : [];
 
