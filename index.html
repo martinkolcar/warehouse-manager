@@ -1146,16 +1146,19 @@ function uploadMTOExcel() {
           var weldType = classifyWeldType(popis);
 
           window.mtoData.materials.push({
-            subor, izometria, kategoria, poz, dn, popis, mn, hmotn,
-            weldType, isoKey
+            subor: subor||'', izometria: izometria||'', kategoria: kategoria||'', 
+            poz: poz||'', dn: dn||'', popis: popis||'', mn: mn||'', hmotn: hmotn||'',
+            weldType: weldType||'', isoKey: isoKey||''
           });
 
           // Kľúč = IZOMETRIA + list suffix zo SÚBOR (napr. 11-NM-350-CFX-PA1H3_1z3)
           var listSuffix = '';
-          var suborBez = subor.replace(/\.(dxf|pdf|dwg)$/i,'').trim();
-          var suffixMatch = suborBez.match(/(_\d+z\d+)$/i);
-          if (suffixMatch) listSuffix = suffixMatch[1];
-          var isoKey = izometria.trim() + listSuffix;
+          if (subor) {
+            var suborBez = subor.replace(/\.(dxf|pdf|dwg)$/i,'').trim();
+            var suffixMatch = suborBez.match(/(_\d+z\d+)$/i);
+            if (suffixMatch) listSuffix = suffixMatch[1];
+          }
+          var isoKey = (izometria || subor.replace(/\.(dxf|pdf|dwg)$/i,'') || '').trim() + listSuffix;
           if (isoKey) isoSet[isoKey] = true;
         });
 
