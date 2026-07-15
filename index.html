@@ -1018,9 +1018,6 @@ document.getElementById('modal').addEventListener('click', function(e) {
       <div class="vyd-iso-panel" id="vyd-iso-panel">
         <div class="vyd-iso-search">
           <input id="vyd-iso-inp" placeholder="🔍 Hľadaj izometriu..." oninput="renderIsoList(this.value)">
-          <select id="vyd-sec-sel" onchange="renderIsoList(document.getElementById('vyd-iso-inp').value)">
-            <option value="">Všetky sekcie</option>
-          </select>
         </div>
         <div class="vyd-iso-list" id="vyd-iso-list">
           <div style="padding:20px;text-align:center;color:#aaa;font-size:12px">Zadajte hľadaný text</div>
@@ -1163,11 +1160,15 @@ function uploadMTOExcel() {
         window.mtoData.isoList = Object.keys(isoSet).sort();
         window.mtoData.loaded = true;
 
-        // Naplň sekcie dynamicky z prefixov názvov izometrií
+        // Naplň sekcie dynamicky - G1.1, G1.2, G2.1 atď.
         var secSet = {};
         window.mtoData.isoList.forEach(function(iso) {
-          var m = iso.match(/^([A-Za-z0-9]+)/);
-          if (m) secSet[m[1]] = true;
+          var parts = iso.split('.');
+          if (parts.length >= 2) {
+            secSet[parts[0] + '.' + parts[1]] = true;
+          } else {
+            secSet[parts[0]] = true;
+          }
         });
         var secSel = document.getElementById('vyd-sec-sel');
         if (secSel) {
@@ -1353,12 +1354,15 @@ function renderIsoList(q) {
 
   var isoSource = window.mtoData.isoList; // kľúče zo SÚBOR bez .dxf
 
-  var sec = (document.getElementById('vyd-sec-sel').value || '').toUpperCase();
   var filtered = isoSource.filter(function(iso) {
-    if (sec && !iso.toUpperCase().startsWith(sec)) return false;
     if (ql && !iso.toLowerCase().includes(ql)) return false;
     return true;
   });
+
+  if (!filtered.length) {
+    el.innerHTML = '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">Žiadne výsledky</div>';
+    return;
+  }
 
   if (!filtered.length) {
     el.innerHTML = '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">Žiadne výsledky</div>';
