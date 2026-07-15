@@ -1019,9 +1019,7 @@ document.getElementById('modal').addEventListener('click', function(e) {
         <div class="vyd-iso-search">
           <input id="vyd-iso-inp" placeholder="🔍 Hľadaj izometriu..." oninput="renderIsoList(this.value)">
         </div>
-        <div class="vyd-iso-list" id="vyd-iso-list">
-          <div style="padding:20px;text-align:center;color:#aaa;font-size:12px">Zadajte hľadaný text</div>
-        </div>
+        <div class="vyd-iso-list" id="vyd-iso-list"></div>
       </div>
 
       <!-- Pravý panel -->
@@ -1364,10 +1362,16 @@ function renderIsoList(q) {
     return;
   }
 
-  if (!filtered.length) {
-    el.innerHTML = '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">Žiadne výsledky</div>';
-    return;
-  }
+  el.innerHTML = filtered.map(function(iso) {
+    var esc = iso.replace(/'/g, "\\'");
+    var active = vydIso === iso ? ' active' : '';
+    var highlighted = ql ? iso.replace(new RegExp('(' + ql.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi'), '<mark style="background:#fff3b0;border-radius:2px">$1</mark>') : iso;
+    var mtoCount = getMTOForIso(iso).length;
+    var badge = mtoCount ? '<span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;margin-left:4px">' + mtoCount + '</span>' : '';
+    return '<div class="vyd-iso-item' + active + '" onclick="selectVydIso(\'' + esc + '\',\'\')">' +
+      '<span class="vyd-iso-name">' + highlighted + badge + '</span>' +
+      '</div>';
+  }).join('');
 }
 
 function selectVydIso(iso, sec) {
