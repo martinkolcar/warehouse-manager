@@ -1929,9 +1929,24 @@ function saveVydajka(mode) {
     const stara = vydajkyList[vydEditIdx];
     // Vráť staré vydané množstvá
     (stara.lines||[]).forEach(l => {
-      const found = items.findIndex(it => it.typ===l.typ && it.rozmer===l.rozmer && it.tavba===l.tavba);
-      if (found >= 0) {
-        items[found].zostatok = Math.round(((parseFloat(items[found].zostatok)||0) + (parseFloat(l.vydQty)||0)) * 10000) / 10000;
+      if (l.fromMTO) {
+        // Položka z MTO - hľadaj podľa weldType a rozmeru
+        const wt = (l.typ||'').toUpperCase();
+        const roz = (l.rozmer||'').replace(/mm$/i,'').trim();
+        const found = items.findIndex(it => {
+          const itWt = classifySkladTyp(it.typ);
+          const itRoz = (it.rozmer||'').replace(/mm$/i,'').trim();
+          return itWt === wt && itRoz === roz;
+        });
+        if (found >= 0) {
+          items[found].zostatok = Math.round(((parseFloat(items[found].zostatok)||0) + (parseFloat(l.vydQty)||0)) * 10000) / 10000;
+        }
+      } else {
+        // Položka zo skladu - hľadaj presne
+        const found = items.findIndex(it => it.typ===l.typ && it.rozmer===l.rozmer && it.tavba===l.tavba);
+        if (found >= 0) {
+          items[found].zostatok = Math.round(((parseFloat(items[found].zostatok)||0) + (parseFloat(l.vydQty)||0)) * 10000) / 10000;
+        }
       }
     });
     // Vráť extra ELBOW45 ktoré pribudli z rezania (odčítaj ich)
@@ -3082,9 +3097,22 @@ function deleteVydajka(idx) {
 
   // Vráť vydané množstvá do skladu
   (v.lines||[]).forEach(l => {
-    const found = items.findIndex(it => it.typ===l.typ && it.rozmer===l.rozmer && it.tavba===l.tavba);
-    if (found >= 0) {
-      items[found].zostatok = Math.round(((parseFloat(items[found].zostatok)||0) + (parseFloat(l.vydQty)||0)) * 10000) / 10000;
+    if (l.fromMTO) {
+      const wt = (l.typ||'').toUpperCase();
+      const roz = (l.rozmer||'').replace(/mm$/i,'').trim();
+      const found = items.findIndex(it => {
+        const itWt = classifySkladTyp(it.typ);
+        const itRoz = (it.rozmer||'').replace(/mm$/i,'').trim();
+        return itWt === wt && itRoz === roz;
+      });
+      if (found >= 0) {
+        items[found].zostatok = Math.round(((parseFloat(items[found].zostatok)||0) + (parseFloat(l.vydQty)||0)) * 10000) / 10000;
+      }
+    } else {
+      const found = items.findIndex(it => it.typ===l.typ && it.rozmer===l.rozmer && it.tavba===l.tavba);
+      if (found >= 0) {
+        items[found].zostatok = Math.round(((parseFloat(items[found].zostatok)||0) + (parseFloat(l.vydQty)||0)) * 10000) / 10000;
+      }
     }
   });
 
