@@ -1020,11 +1020,6 @@ document.getElementById('modal').addEventListener('click', function(e) {
           <input id="vyd-iso-inp" placeholder="🔍 Hľadaj izometriu..." oninput="renderIsoList(this.value)">
           <select id="vyd-sec-sel" onchange="renderIsoList(document.getElementById('vyd-iso-inp').value)">
             <option value="">Všetky sekcie</option>
-            <option value="SUL">SUL</option>
-            <option value="FLA">FLA</option>
-            <option value="LIG">LIG</option>
-            <option value="DRY">DRY</option>
-            <option value="LHT">LHT</option>
           </select>
         </div>
         <div class="vyd-iso-list" id="vyd-iso-list">
@@ -1167,6 +1162,20 @@ function uploadMTOExcel() {
 
         window.mtoData.isoList = Object.keys(isoSet).sort();
         window.mtoData.loaded = true;
+
+        // Naplň sekcie dynamicky z prefixov názvov izometrií
+        var secSet = {};
+        window.mtoData.isoList.forEach(function(iso) {
+          var m = iso.match(/^([A-Za-z0-9]+)/);
+          if (m) secSet[m[1]] = true;
+        });
+        var secSel = document.getElementById('vyd-sec-sel');
+        if (secSel) {
+          secSel.innerHTML = '<option value="">Všetky sekcie</option>';
+          Object.keys(secSet).sort().forEach(function(s) {
+            secSel.innerHTML += '<option value="' + s + '">' + s + '</option>';
+          });
+        }
 
         // Ulož na Firebase
         var base = window._currentProject ? 'projects/' + window._currentProject.id : 'legacy';
@@ -1344,7 +1353,9 @@ function renderIsoList(q) {
 
   var isoSource = window.mtoData.isoList; // kľúče zo SÚBOR bez .dxf
 
+  var sec = (document.getElementById('vyd-sec-sel').value || '').toUpperCase();
   var filtered = isoSource.filter(function(iso) {
+    if (sec && !iso.toUpperCase().startsWith(sec)) return false;
     if (ql && !iso.toLowerCase().includes(ql)) return false;
     return true;
   });
