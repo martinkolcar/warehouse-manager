@@ -1514,10 +1514,17 @@ function renderVydMatList() {
 
       // Skontroluj či máme v sklade
       var rozmer = dims.size || '';
+      // Pre FLANGE, CAP, TESNENIA a iné kde extractDims vracia prázdne - použi DN
+      if (!rozmer && m.dn) rozmer = String(m.dn).trim();
       var vSklade = wt ? items.some(function(it) {
-        return classifySkladTyp(it.typ) === wt &&
-               (it.rozmer||'').replace(/mm$/i,'').trim() === rozmer.replace(/mm$/i,'').trim() &&
-               parseFloat(it.zostatok) > 0;
+        var itWt = classifySkladTyp(it.typ);
+        if (itWt !== wt) return false;
+        if (parseFloat(it.zostatok) <= 0) return false;
+        // Pre FLANGE porovnaj DN z rozmeru skladu
+        var itRoz = (it.rozmer||'').replace(/mm$/i,'').trim();
+        var mRoz = rozmer.replace(/mm$/i,'').trim();
+        if (!mRoz) return true; // ak nepoznáme rozmer, ponúkni
+        return itRoz === mRoz || itRoz.includes(mRoz) || mRoz.includes(itRoz);
       }) : false;
 
       var canVydat = wt && vSklade;
@@ -1797,9 +1804,11 @@ function buildVydRow(i, l) {
   }
 
   const badge = `<span class="badge badge-${typClass(l.typ)}">${shortType(l.typ)}</span>`;
+  // Pre MTO položky zobraz slovenský popis, pre sklad zobraz typ priamo
+  const typPopis = l.fromMTO && l.mtoPopis ? l.mtoPopis.substring(0, 60) : l.typ;
 
   let html = `
-    <td>${badge}${stavBadge}<br><span style="font-size:10px;color:#555;word-break:break-word;max-width:130px;display:inline-block">${l.typ}</span></td>
+    <td>${badge}${stavBadge}<br><span style="font-size:10px;color:#555;word-break:break-word;max-width:130px;display:inline-block">${typPopis}</span></td>
     <td style="font-family:monospace;font-weight:700">${l.rozmer}</td>
     <td style="font-family:monospace;font-size:11px">${l.material||'—'}</td>
     <td style="font-family:monospace;font-size:11px">${l.tavba||'—'}</td>
@@ -2427,6 +2436,8 @@ function buildVydajkaObj(datum) {
       norma: l.norma, tavba: l.tavba, jednotka: l.jednotka,
       isPipe: l.isPipe || false,
       fromMTO: l.fromMTO || false,
+      mtoPopis: l.mtoPopis || '',
+      mtoPN: l.mtoPN || '',
       vydQty: l.isPipe ? Math.round((parseFloat(l.dlzka)||0)/1000*10000)/10000 : (parseFloat(l.vydQty)||0),
       dlzka: l.dlzka||'', spCislo: l.spCislo||'',
       extra45Saved: l.extra45Saved||0,
