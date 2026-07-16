@@ -1717,7 +1717,7 @@ function addToVydajkaDirect(idx, qty) {
   if (!it) return;
   const isPipe = classifySkladTyp(it.typ) === 'PIPE';
 
-  // Ak je ELBOW90 a MTO potrebuje ELBOW45 tohto rozmeru → označ ako rezaný
+  // Ak je ELBOW90 a MTO potrebuje ELBOW45 ale NEpotrebuje ELBOW90 tohto rozmeru → označ ako rezaný
   const wt = classifySkladTyp(it.typ);
   let rezanyNa = null;
   if (wt === 'ELBOW90' && vydIso) {
@@ -1727,7 +1727,12 @@ function addToVydajkaDirect(idx, qty) {
       (m.weldType||'').toUpperCase() === 'ELBOW45' &&
       (m.popis||'').includes(rozNorm)
     );
-    if (needsE45) rezanyNa = 'ELBOW45';
+    const needsE90 = mtoItems.some(m =>
+      (m.weldType||'').toUpperCase() === 'ELBOW90' &&
+      (m.popis||'').includes(rozNorm)
+    );
+    // Rezať len ak MTO potrebuje ELBOW45 ale NEpotrebuje ELBOW90
+    if (needsE45 && !needsE90) rezanyNa = 'ELBOW45';
   }
 
   vydLines.push({
