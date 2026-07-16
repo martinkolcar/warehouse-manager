@@ -1661,16 +1661,36 @@ function addMTOToVydajka(mtoIdx) {
   var dims = extractDimsFromPopis(m.popis);
   var mat  = extractMaterialFromPopis(m.popis);
   var isPipe = m.weldType === 'PIPE';
+  var wt = m.weldType;
+
+  // Nájdi zodpovedajúce položky v sklade
+  var rozmer = dims.size || String(m.dn||'');
+  var skladItems = items.filter(function(it) {
+    if (parseFloat(it.zostatok) <= 0) return false;
+    var itWt = classifySkladTyp(it.typ);
+    if (itWt !== wt) return false;
+    var itRoz = (it.rozmer||'').replace(/mm$/i,'').trim();
+    var mRoz = rozmer.replace(/mm$/i,'').trim();
+    return !mRoz || itRoz === mRoz || itRoz.includes(mRoz.split('x')[0]);
+  });
+
+  // Ak je presne jedna položka v sklade — vezmi jej tavbu
+  var tavba = '';
+  var itemIdx = null;
+  if (skladItems.length === 1) {
+    tavba = skladItems[0].tavba || '';
+    itemIdx = items.indexOf(skladItems[0]);
+  }
 
   vydLines.push({
-    itemIdx: null,        // nie zo skladu — z MTO
+    itemIdx: itemIdx,
     typ: m.weldType,
     rozmer: dims.size || m.dn,
     material: mat,
     norma: '',
-    tavba: '',
+    tavba: tavba,
     jednotka: isPipe ? 'm' : 'ks',
-    stockMax: 0,
+    stockMax: skladItems.length === 1 ? (parseFloat(skladItems[0].zostatok)||0) : 0,
     vydQty: isPipe ? 0 : 1,
     dlzka: '',
     spCislo: '',
@@ -1695,7 +1715,7 @@ function addMTOToVydajka(mtoIdx) {
 function addToVydajkaDirect(idx, qty) {
   const it = items[idx];
   if (!it) return;
-  const isPipe = (it.typ||'').toLowerCase().includes('pipe');
+  const isPipe = classifySkladTyp(it.typ) === 'PIPE';
 
   // Ak je ELBOW90 a MTO potrebuje ELBOW45 tohto rozmeru → označ ako rezaný
   const wt = classifySkladTyp(it.typ);
