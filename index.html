@@ -1822,10 +1822,10 @@ function buildVydRow(i, l) {
 
   // Stav badge
   let stavBadge = '';
-  if (isElbow90 && isOK) {
+  if (isElbow90 && isOK && l.rezanyNa === 'ELBOW45') {
     stavBadge = `<br><span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;font-weight:700">✂️ ×${qty*2} ELBOW45</span>`;
   } else if (isOK) {
-    stavBadge = `<br><span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px">✅</span>`;
+    stavBadge = `<br><span style="font-size:10px;background:#dcfce7;color:#166634;padding:1px 5px;border-radius:3px">✅</span>`;
   }
 
   const badge = `<span class="badge badge-${typClass(l.typ)}">${shortType(l.typ)}</span>`;
