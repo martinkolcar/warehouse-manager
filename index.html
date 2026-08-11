@@ -517,24 +517,24 @@ function populateMainFilters() {
 function typClass(typ) {
   const t = (typ||'').toLowerCase();
   if (t.includes('pipe') || t.includes('rúra') || t.includes('rura'))    return 'pipe';
-  if (t.includes('elbow'))   return 'elbow';
-  if (t.includes('reducer')) return 'reducer';
-  if (t.includes('flange'))  return 'flange';
-  if (t.includes('t-piece') || t.includes('tee')) return 'tee';
-  if (t.includes('cap'))     return 'cap';
+  if (t.includes('elbow') || t.includes('obluk') || t.includes('oblúk') || t.includes('koleno'))   return 'elbow';
+  if (t.includes('reducer') || t.includes('redukci')) return 'reducer';
+  if (t.includes('flange') || t.includes('príruba') || t.includes('priruba'))  return 'flange';
+  if (t.includes('t-piece') || t.includes('tee') || t.includes('t-kus')) return 'tee';
+  if (t.includes('cap') || t.includes('záslepka') || t.includes('zaslepka'))     return 'cap';
   return 'other';
 }
 
 function shortType(typ) {
   const t = (typ||'').toLowerCase();
   if (t.includes('pipe') || t.includes('rúra') || t.includes('rura'))    return 'PIPE';
-  if (t.includes('elbow'))   return 'ELBOW';
-  if (t.includes('reducer')) return 'REDUCER';
+  if (t.includes('elbow') || t.includes('obluk') || t.includes('oblúk') || t.includes('koleno'))   return 'ELBOW';
+  if (t.includes('reducer') || t.includes('redukci')) return 'REDUCER';
   if (t.startsWith('weld'))  return 'FLANGE WN';
   if (t.startsWith('blank')) return 'FLANGE BL';
-  if (t.includes('flange'))  return 'FLANGE';
-  if (t.includes('t-piece')) return 'T-PIECE';
-  if (t.includes('cap'))     return 'CAP';
+  if (t.includes('flange') || t.includes('príruba') || t.includes('priruba'))  return 'FLANGE';
+  if (t.includes('t-piece') || t.includes('t-kus')) return 'T-PIECE';
+  if (t.includes('cap') || t.includes('záslepka') || t.includes('zaslepka'))     return 'CAP';
   return typ.split(' ')[0].toUpperCase();
 }
 
@@ -2382,9 +2382,11 @@ function wbShortType(typ) {
   if (t.includes('45') && (t.includes('ELBOW') || t.includes('OBLÚK') || t.includes('OBLUK'))) return 'ELBOW45';
   if (t.includes('ELBOW') || t.includes('OBLÚK') || t.includes('OBLUK') || t.includes('KOLENO')) return 'ELBOW';
   if (t.includes('T-PIECE') || t.includes('TEE') || t.includes('T-KUS')) return 'TEE';
+  if (t.includes('BRANCH') || t.includes('ODBOČKA') || t.includes('ODBOCKA')) return 'BRANCH';
   if (t.includes('REDUCER') || t.includes('REDUKCI')) return 'REDUCER';
   if (t.includes('FLANGE') || t.includes('PRÍRUBA') || t.includes('PRIRUBA')) return 'FLANGE';
   if (t.includes('CAP') || t.includes('ZÁSLEPKA') || t.includes('ZASLEPKA')) return 'CAP';
+  if (t.includes('VALVE') || t.includes('VENTIL') || t.includes('KLAPKA')) return 'VALVE';
   return null;
 }
 
