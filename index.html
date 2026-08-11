@@ -1219,7 +1219,8 @@ function classifyWeldType(popis) {
   if (p.includes('T-KUS') || p.includes('TKUS')) return 'TEE';
   if (p.includes('ODBOČKA')) return 'BRANCH';
   if (p.includes('REDUKCI')) return 'REDUCER';
-  if (p.includes('PRÍRUBA') || p.includes('PRIRUBA') || p.includes('ZASLEPOVACIA')) return 'FLANGE';
+  if (p.includes('ZASLEPOVACIA') || p.includes('ZASLEPOVAC') || p.includes('BLIND') || p.includes('BLANK')) return 'FLANGE-BLK';
+  if (p.includes('PRÍRUBA') || p.includes('PRIRUBA')) return 'FLANGE';
   if (p.includes('ZÁSLEPKA') || p.includes('ZASLEPKA')) return 'CAP';
   // Ventil/klapka s prírubami = prírubový spoj, nie zvar
   if ((p.includes('VENTIL') || p.includes('KLAPKA')) && (p.includes('PRÍRUB') || p.includes('PRIRUB') || p.includes('PN'))) return null;
@@ -1484,6 +1485,7 @@ function classifySkladTyp(typ) {
   if (t.includes('T-PIECE') || t.includes('T-KUS') || t.includes('TEE')) return 'TEE';
   if (t.includes('BRANCH') || t.includes('ODBOČKA')) return 'BRANCH';
   if (t.includes('REDUCER') || t.includes('REDUKCI')) return 'REDUCER';
+  if (t.includes('ZASLEPOVACIA') || t.includes('ZASLEPOVAC') || t.includes('BLIND') || t.includes('BLANK')) return 'FLANGE-BLK';
   if (t.includes('FLANGE') || t.includes('PRÍRUBA') || t.includes('PRIRUBA')) return 'FLANGE';
   if (t.includes('CAP') || t.includes('ZÁSLEPKA') || t.includes('ZASLEPKA')) return 'CAP';
   if (t.includes('VALVE') || t.includes('VENTIL') || t.includes('KLAPKA')) return 'VALVE';
@@ -3006,7 +3008,7 @@ function renderZoznam() {
 
     const mtoMap = {};
     mtoItems.forEach(m => {
-      const rozmerKey = (m.popis||'').match(/(\d+\.?\d*x\d+\.?\d*mm?(?:\s*\/\s*\d+\.?\d*x\d+\.?\d*mm?)?)/i);
+      const rozmerKey = (m.popis||'').match(/(\d+\.?\d*x\d+\.?\d*mm?)/i);
       const rozmer = rozmerKey ? rozmerKey[1].replace(/mm$/i,'').trim() : ('DN'+(m.dn||''));
       const k = (m.weldType||'').toUpperCase() + '|' + rozmer;
       const mnVal = parseFloat((m.mn||'').toString().replace(/[mM\s]/g,''))||1;
