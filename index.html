@@ -2095,12 +2095,12 @@ function odcitajSklad() {
     }
 
     if (l.fromMTO || l.itemIdx === null) {
-      var rozmer = (l.rozmer||'').toLowerCase().replace(/\s/g,'');
+      var rozmer = (l.rozmer||'').toLowerCase().replace(/\s/g,'').replace(/^dn/,'');
       var mat = (l.material||'').toLowerCase();
       var best = -1, bestScore = 0;
       items.forEach(function(it, idx) {
         if (parseFloat(it.zostatok) <= 0) return;
-        var itRoz = (it.rozmer||'').toLowerCase().replace(/\s/g,'');
+        var itRoz = (it.rozmer||'').toLowerCase().replace(/\s/g,'').replace(/^dn/,'');
         var itMat = (it.material||'').toLowerCase();
         var rozMatch = itRoz === rozmer || itRoz.startsWith(rozmer.split('x')[0]) || rozmer.startsWith(itRoz.split('x')[0]);
         var matMatch = !mat || itMat.includes(mat) || mat.includes(itMat);
@@ -2731,8 +2731,8 @@ function openCoMozeme() {
           if (itWbTyp && itWbTyp !== m.weldType) return false;
           // Ak wbShortType vráti null (neznámy typ) — nevylučuj, nech rozmer rozhodne
         }
-        var itRoz = (it.rozmer||'').toLowerCase().replace(/\s/g,'');
-        var mRoz = (m.dims||'').toLowerCase().replace(/\s/g,'');
+        var itRoz = (it.rozmer||'').toLowerCase().replace(/\s/g,'').replace(/^dn/,'');
+        var mRoz = (m.dims||'').toLowerCase().replace(/\s/g,'').replace(/^dn/,'');
         var mRozFirst = mRoz.split('x')[0];
         var itRozFirst = itRoz.split('x')[0];
         var rozMatch = mRozFirst && itRozFirst && (mRozFirst === itRozFirst);
