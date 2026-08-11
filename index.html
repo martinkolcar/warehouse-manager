@@ -2280,19 +2280,23 @@ async function zapisHeatyDoWeldPro(vydajka) {
         Object.keys(tavbyMap).forEach(function(key) {
           var parts = key.split('||');
           var wbTyp = parts[0];
-          var dim = parts[1];
+          var dim = parts[1].replace(/^DN/i,'').trim(); // odstrán DN prefix
           var tavby = tavbyMap[key];
           var heat1 = tavby.size === 1 ? Array.from(tavby)[0] : '';
           var wbTypBase = wbTyp.replace(/45$|90$/, '');
 
           // item1
           var d1 = (r.dimension1||'').toString().replace(/^DN/i,'').trim();
-          if (((r.item1||'').toUpperCase().includes(wbTyp) || (r.item1||'').toUpperCase().includes(wbTypBase)) && d1 === dim) {
+          var dimMatch1 = dim === '' || d1 === dim || 
+                         (wbTyp === 'FLANGE' || wbTyp === 'FLANGE-BLK'); // FLANGE - ignoruj dimenziu
+          if (((r.item1||'').toUpperCase().includes(wbTyp) || (r.item1||'').toUpperCase().includes(wbTypBase)) && dimMatch1) {
             if (tavby.size === 1 && r.heatNr1 !== heat1) { r.heatNr1 = heat1; changed = true; }
           }
           // item2
           var d2 = (r.dimension2||'').toString().replace(/^DN/i,'').trim();
-          if (((r.item2||'').toUpperCase().includes(wbTyp) || (r.item2||'').toUpperCase().includes(wbTypBase)) && d2 === dim) {
+          var dimMatch2 = dim === '' || d2 === dim ||
+                         (wbTyp === 'FLANGE' || wbTyp === 'FLANGE-BLK'); // FLANGE - ignoruj dimenziu
+          if (((r.item2||'').toUpperCase().includes(wbTyp) || (r.item2||'').toUpperCase().includes(wbTypBase)) && dimMatch2) {
             if (tavby.size === 1 && r.heatNr2 !== heat1) { r.heatNr2 = heat1; changed = true; }
           }
         });
