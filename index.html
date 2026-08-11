@@ -516,7 +516,7 @@ function populateMainFilters() {
 
 function typClass(typ) {
   const t = (typ||'').toLowerCase();
-  if (t.includes('pipe'))    return 'pipe';
+  if (t.includes('pipe') || t.includes('rúra') || t.includes('rura'))    return 'pipe';
   if (t.includes('elbow'))   return 'elbow';
   if (t.includes('reducer')) return 'reducer';
   if (t.includes('flange'))  return 'flange';
@@ -527,7 +527,7 @@ function typClass(typ) {
 
 function shortType(typ) {
   const t = (typ||'').toLowerCase();
-  if (t.includes('pipe'))    return 'PIPE';
+  if (t.includes('pipe') || t.includes('rúra') || t.includes('rura'))    return 'PIPE';
   if (t.includes('elbow'))   return 'ELBOW';
   if (t.includes('reducer')) return 'REDUCER';
   if (t.startsWith('weld'))  return 'FLANGE WN';
@@ -1763,7 +1763,7 @@ function addToVydajkaDirect(idx, qty) {
 function addToVydajka(idx) {
   const it = items[idx];
   if (!vydIso) { alert('Najprv vyberte izometriu'); return; }
-  const isPipe = (it.typ||'').toLowerCase().includes('pipe');
+  const isPipe = (it.typ||'').toLowerCase().includes('pipe') || (it.typ||'').toLowerCase().includes('rúra') || (it.typ||'').toLowerCase().includes('rura');
 
 
 
@@ -2721,7 +2721,7 @@ function openCoMozeme() {
         if (parseFloat(it.zostatok) <= 0) return false;
         // Typ match — PIPE len s PIPE, fittingy len s fittingmi
         var itTypLower = (it.typ||'').toLowerCase();
-        var itIsPipe = itTypLower.includes('pipe');
+        var itIsPipe = itTypLower.includes('pipe') || itTypLower.includes('rúra') || itTypLower.includes('rura');
         if (isPipeMTO !== itIsPipe) return false;
         // Pre fittingy skontroluj aj weldType
         if (!isPipeMTO) {
@@ -3432,7 +3432,7 @@ function addFromTavbaScanner(itemIdx) {
       norma: it.norma, tavba: it.tavba, jednotka: it.jednotka,
       stockMax: parseFloat(it.zostatok)||0,
       vydQty: qty, dlzka: '', spCislo: '',
-      isPipe: (it.typ||'').toLowerCase().includes('pipe'),
+      isPipe: (it.typ||'').toLowerCase().includes('pipe') || (it.typ||'').toLowerCase().includes('rúra') || (it.typ||'').toLowerCase().includes('rura'),
     });
     var panel = document.getElementById('vyd-lines-panel');
     panel.style.display = 'flex'; panel.style.flexDirection = 'column';
