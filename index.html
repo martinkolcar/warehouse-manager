@@ -2204,20 +2204,47 @@ function odcitajSklad() {
 }
 
 // ─── ZÁPIS / MAZANIE HEAT VO WELDPRO WELDBOOK ────────────────────────────────
-async function getWbDocId() {
-  // Zisti všetky dokumenty v weldbook collection a nájdi správny
+// 🆕 Píše do novej per-izometria štruktúry (weldbook_iso) - jeden malý, samostatný
+// dokument pre každú izometriu. Bezpečné aj pri súbežnej práci viacerých ľudí vo WeldPro.
+function wpNormIso(s) {
+  return (s||'').replace(/\.(dxf|pdf|jpg|png)$/i,'').replace(/[._]/g,'_').toLowerCase();
+}
+
+async function findWeldBookIsoDoc(isoName) {
+  if (!window.weldproFS) return null;
+  var isoNameNorm = wpNormIso(isoName);
   try {
-    var snap = await window.weldproFS.collection('weldbook').get();
-    var docs = snap.docs.map(function(d){return d.id;});
-    console.log('📚 WeldBook docs:', docs);
-    // Ak existuje len weldbook_main → použij ho
-    if (docs.length === 1) return docs[0];
-    // Ak existuje viac → nájdi podľa izometrie (skip)
-    // Preferuj non-ALL docs
-    var nonMain = docs.filter(function(d){return d !== 'weldbook_main';});
-    if (nonMain.length === 1) return nonMain[0];
-  } catch(e) { console.warn('getWbDocId err:', e); }
-  return 'weldbook_main';
+    var snap = await window.weldproFS.collection('weldbook_iso').get();
+    var found = null;
+    snap.forEach(function(d) {
+      if (found) return;
+      var data = d.data();
+      if (wpNormIso(data.isometric) === isoNameNorm) found = { docId: d.id, data: data };
+    });
+    return found;
+  } catch(e) { console.warn('findWeldBookIsoDoc err:', e); return null; }
+}
+
+async function saveWeldBookIsoDoc(found, welds) {
+  await window.weldproFS.collection('weldbook_iso').doc(found.docId).set({
+    part: found.data.part || '',
+    isometric: found.data.isometric,
+    welds: welds,
+    count: welds.length,
+    updated: new Date().toISOString(),
+    modifiedBy: 'warehouse',
+    sessionId: 'warehouse_' + Date.now()
+  });
+  // Pošli signál, nech si to WeldPro (ak má niekto otvorené) hneď prekreslí
+  try {
+    await window.weldproFS.collection('weldbook_signal').doc('latest').set({
+      by: 'warehouse',
+      mode: 'iso',
+      part: found.data.part || 'ALL',
+      isometric: found.data.isometric,
+      at: new Date().toISOString()
+    });
+  } catch(e) { console.warn('Signal err:', e); }
 }
 
 async function zapisHeatyDoWeldPro(vydajka) {
@@ -2247,128 +2274,60 @@ async function zapisHeatyDoWeldPro(vydajka) {
 
   if (!Object.keys(tavbyMap).length) { console.log('Žiadne tavby na zápis'); return; }
 
-  // Načítaj všetky WeldBook dokumenty a nájdi izometriu
-  var snap = await window.weldproFS.collection('weldbook').get();
-  var allDocs = snap.docs.map(function(d){ return d.id; });
+  var found = await findWeldBookIsoDoc(isoName);
+  if (!found) { console.log('Izometria nenájdená vo weldbook_iso:', isoName); return; }
 
-  for (var di = 0; di < allDocs.length; di++) {
-    var docId = allDocs[di];
-    try {
-      var mainDoc = await window.weldproFS.collection('weldbook').doc(docId).get();
-      if (!mainDoc.exists) continue;
-      var chunks = mainDoc.data().chunks || 1;
+  var welds = found.data.welds || [];
+  var changed = false;
 
-      // Spoj chunky
-      var joined = '';
-      for (var ci = 0; ci < chunks; ci++) {
-        var cd = await window.weldproFS.collection('weldbook').doc(docId).collection('data').doc('c'+ci).get();
-        if (cd.exists) joined += cd.data().d;
+  welds.forEach(function(r) {
+    Object.keys(tavbyMap).forEach(function(key) {
+      var parts = key.split('||');
+      var wbTyp = parts[0];
+      var dim = parts[1].replace(/^DN/i,'').trim();
+      var tavby = tavbyMap[key];
+      var heat1 = tavby.size === 1 ? Array.from(tavby)[0] : '';
+      var wbTypBase = wbTyp.replace(/45$|90$/, '');
+
+      var d1 = (r.dimension1||'').toString().replace(/^DN/i,'').trim();
+      var dimMatch1 = dim === '' || d1 === dim ||
+                     (wbTyp === 'FLANGE' || wbTyp === 'FLANGE-BLK');
+      if (((r.item1||'').toUpperCase().includes(wbTyp) || (r.item1||'').toUpperCase().includes(wbTypBase)) && dimMatch1) {
+        if (tavby.size === 1 && r.heatNr1 !== heat1) { r.heatNr1 = heat1; changed = true; }
       }
-      var allData = JSON.parse(joined);
-
-      // Skontroluj či dokument obsahuje našu izometriu
-      function normIso(s) { return (s||'').replace(/\.(dxf|pdf|jpg|png)$/i,'').replace(/[._]/g,'_').toLowerCase(); }
-      var isoNameNorm = normIso(isoName);
-      var hasIso = allData.some(function(r){ return normIso(r.isometric) === isoNameNorm; });
-      if (!hasIso) { console.log('Izometria nenájdená v', docId); continue; }
-
-      console.log('📝 Zapisujem heaty do:', docId);
-      var changed = false;
-
-      allData.forEach(function(r) {
-        if (normIso(r.isometric) !== isoNameNorm) return;
-        Object.keys(tavbyMap).forEach(function(key) {
-          var parts = key.split('||');
-          var wbTyp = parts[0];
-          var dim = parts[1].replace(/^DN/i,'').trim(); // odstrán DN prefix
-          var tavby = tavbyMap[key];
-          var heat1 = tavby.size === 1 ? Array.from(tavby)[0] : '';
-          var wbTypBase = wbTyp.replace(/45$|90$/, '');
-
-          // item1
-          var d1 = (r.dimension1||'').toString().replace(/^DN/i,'').trim();
-          var dimMatch1 = dim === '' || d1 === dim || 
-                         (wbTyp === 'FLANGE' || wbTyp === 'FLANGE-BLK'); // FLANGE - ignoruj dimenziu
-          if (((r.item1||'').toUpperCase().includes(wbTyp) || (r.item1||'').toUpperCase().includes(wbTypBase)) && dimMatch1) {
-            if (tavby.size === 1 && r.heatNr1 !== heat1) { r.heatNr1 = heat1; changed = true; }
-          }
-          // item2
-          var d2 = (r.dimension2||'').toString().replace(/^DN/i,'').trim();
-          var dimMatch2 = dim === '' || d2 === dim ||
-                         (wbTyp === 'FLANGE' || wbTyp === 'FLANGE-BLK'); // FLANGE - ignoruj dimenziu
-          if (((r.item2||'').toUpperCase().includes(wbTyp) || (r.item2||'').toUpperCase().includes(wbTypBase)) && dimMatch2) {
-            if (tavby.size === 1 && r.heatNr2 !== heat1) { r.heatNr2 = heat1; changed = true; }
-          }
-        });
-      });
-
-      if (!changed) { console.log('ℹ Heat — žiadne zmeny pre', isoName, 'v', docId); continue; }
-
-      // Ulož späť
-      var WB_CHUNK_SIZE = 400 * 1024;
-      var fullJson = JSON.stringify(allData);
-      var newChunks = [];
-      for (var si = 0; si < fullJson.length; si += WB_CHUNK_SIZE) {
-        newChunks.push(fullJson.slice(si, si + WB_CHUNK_SIZE));
+      var d2 = (r.dimension2||'').toString().replace(/^DN/i,'').trim();
+      var dimMatch2 = dim === '' || d2 === dim ||
+                     (wbTyp === 'FLANGE' || wbTyp === 'FLANGE-BLK');
+      if (((r.item2||'').toUpperCase().includes(wbTyp) || (r.item2||'').toUpperCase().includes(wbTypBase)) && dimMatch2) {
+        if (tavby.size === 1 && r.heatNr2 !== heat1) { r.heatNr2 = heat1; changed = true; }
       }
-      var batch = window.weldproFS.batch();
-      newChunks.forEach(function(c, i) {
-        batch.set(window.weldproFS.collection('weldbook').doc(docId).collection('data').doc('c'+i), {d: c});
-      });
-      batch.set(window.weldproFS.collection('weldbook').doc(docId), { chunks: newChunks.length }, { merge: true });
-      await batch.commit();
-      console.log('✅ Heaty zapísané do', docId);
+    });
+  });
 
-    } catch(e) { console.warn('Chyba pri', docId, ':', e.message); }
-  }
+  if (!changed) { console.log('ℹ Heat — žiadne zmeny pre', isoName); return; }
+
+  await saveWeldBookIsoDoc(found, welds);
+  console.log('✅ Heaty zapísané do', found.docId);
 }
 
 
 async function clearHeatyZWeldBookuAll(vydajka) {
   if (!window.weldproFS || !vydajka.iso) return;
   var isoName = vydajka.iso.replace(/\.(dxf|pdf|jpg|png)$/i, '');
-  function normIso(s) { return (s||'').replace(/\.(dxf|pdf|jpg|png)$/i,'').replace(/[._]/g,'_').toLowerCase(); }
-  var isoNameNorm = normIso(isoName);
 
-  var snap = await window.weldproFS.collection('weldbook').get();
-  var allDocs = snap.docs.map(function(d){ return d.id; });
+  var found = await findWeldBookIsoDoc(isoName);
+  if (!found) return;
 
-  for (var di = 0; di < allDocs.length; di++) {
-    var docId = allDocs[di];
-    try {
-      var mainDoc = await window.weldproFS.collection('weldbook').doc(docId).get();
-      if (!mainDoc.exists) continue;
-      var chunks = mainDoc.data().chunks || 1;
-      var joined = '';
-      for (var ci = 0; ci < chunks; ci++) {
-        var cd = await window.weldproFS.collection('weldbook').doc(docId).collection('data').doc('c'+ci).get();
-        if (cd.exists) joined += cd.data().d;
-      }
-      var allData = JSON.parse(joined);
-      var hasIso = allData.some(function(r){ return normIso(r.isometric) === isoNameNorm; });
-      if (!hasIso) continue;
+  var welds = found.data.welds || [];
+  var changed = false;
+  welds.forEach(function(r) {
+    if (r.heatNr1) { r.heatNr1 = ''; changed = true; }
+    if (r.heatNr2) { r.heatNr2 = ''; changed = true; }
+  });
+  if (!changed) return;
 
-      var changed = false;
-      allData.forEach(function(r) {
-        if (normIso(r.isometric) !== isoNameNorm) return;
-        if (r.heatNr1) { r.heatNr1 = ''; changed = true; }
-        if (r.heatNr2) { r.heatNr2 = ''; changed = true; }
-      });
-      if (!changed) continue;
-
-      var WB_CHUNK_SIZE = 400 * 1024;
-      var fullJson = JSON.stringify(allData);
-      var newChunks = [];
-      for (var si = 0; si < fullJson.length; si += WB_CHUNK_SIZE) newChunks.push(fullJson.slice(si, si + WB_CHUNK_SIZE));
-      var batch = window.weldproFS.batch();
-      newChunks.forEach(function(c, i) {
-        batch.set(window.weldproFS.collection('weldbook').doc(docId).collection('data').doc('c'+i), {d: c});
-      });
-      batch.set(window.weldproFS.collection('weldbook').doc(docId), { chunks: newChunks.length }, { merge: true });
-      await batch.commit();
-      console.log('🗑️ Heaty vymazané z', docId);
-    } catch(e) { console.warn('Chyba clear v', docId, ':', e.message); }
-  }
+  await saveWeldBookIsoDoc(found, welds);
+  console.log('🗑️ Heaty vymazané z', found.docId);
 }
 
 async function clearHeatyZWeldBooku(vydajka) {
