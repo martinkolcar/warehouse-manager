@@ -1864,9 +1864,8 @@ function addToVydajka(idx) {
   }
 
   const wt2 = classifySkladTyp(it.typ);
-  // Ak je výnimka ELBOW90 (nie je v MTO kľúčoch) → forceRezat
-  const _rn = (it.rozmer||'').replace(/mm$/i,'').trim();
-  const isVynimkaElbow = window.vydVynimkaMode && wt2 === 'ELBOW90';
+  // Ak je výnimka ELBOW90 → forceRezat
+  const isVynimkaElbow = vydVynimkaMode && wt2 === 'ELBOW90';
   addToVydajkaDirect(idx, null, isVynimkaElbow);
 }
 
@@ -2199,7 +2198,8 @@ function odcitajSklad() {
     if (wt !== 'ELBOW90' && wt !== 'ELBOW45') return;
     const roz = (l.rozmer||'').replace(/mm$/i,'').trim();
     if (!rozmerGroups[roz]) rozmerGroups[roz] = { qty90: 0, qty45: 0, typ90: null, it90: null };
-    if (wt === 'ELBOW90') {
+    // Počítaj len ELBOW90 ktoré sú rezané na ELBOW45
+    if (wt === 'ELBOW90' && l.rezanyNa === 'ELBOW45') {
       rozmerGroups[roz].qty90 += parseFloat(l.vydQty)||0;
       rozmerGroups[roz].typ90 = l.typ;
       rozmerGroups[roz].it90 = l;
