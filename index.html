@@ -3279,6 +3279,10 @@ function deleteVydajka(idx) {
       items[e45idx].zostatok = Math.max(0,
         Math.round(((parseFloat(items[e45idx].zostatok)||0) - realExtra) * 10000) / 10000
       );
+      // Ak vznikol z rezania a zostatok je 0 → odstrán zo skladu
+      if (items[e45idx].zostatok === 0 && (items[e45idx].zdroj_dl === 'KONVERZIA' || (items[e45idx].poznamka||'').includes('rezania'))) {
+        items.splice(e45idx, 1);
+      }
     }
   });
 
