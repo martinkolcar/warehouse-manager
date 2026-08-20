@@ -3223,7 +3223,8 @@ function deleteVydajka(idx) {
     if (wt !== 'ELBOW90' && wt !== 'ELBOW45') return;
     const roz = (l.rozmer||'').replace(/mm$/i,'').trim();
     if (!rozmerGroups[roz]) rozmerGroups[roz] = {qty90:0, qty45:0, ref:null};
-    if (wt === 'ELBOW90') { rozmerGroups[roz].qty90 += parseFloat(l.vydQty)||0; rozmerGroups[roz].ref = l; }
+    // Počítaj len rezané ELBOW90
+    if (wt === 'ELBOW90' && l.rezanyNa === 'ELBOW45') { rozmerGroups[roz].qty90 += parseFloat(l.vydQty)||0; rozmerGroups[roz].ref = l; }
     if (wt === 'ELBOW45') rozmerGroups[roz].qty45 += parseFloat(l.vydQty)||0;
   });
 
