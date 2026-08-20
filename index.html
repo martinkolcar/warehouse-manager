@@ -1145,12 +1145,6 @@ function uploadMTOExcel() {
           // Klasifikuj typ
           var weldType = classifyWeldType(popis);
 
-          window.mtoData.materials.push({
-            subor: subor||'', izometria: izometria||'', kategoria: kategoria||'', 
-            poz: poz||'', dn: dn||'', popis: popis||'', mn: mn||'', hmotn: hmotn||'',
-            weldType: weldType||'', isoKey: isoKey||''
-          });
-
           // Kľúč = IZOMETRIA + list suffix zo SÚBOR (napr. 11-NM-350-CFX-PA1H3_1z3)
           var listSuffix = '';
           if (subor) {
@@ -1160,6 +1154,12 @@ function uploadMTOExcel() {
           }
           var isoKey = (izometria || subor.replace(/\.(dxf|pdf|dwg)$/i,'') || '').trim() + listSuffix;
           if (isoKey) isoSet[isoKey] = true;
+
+          window.mtoData.materials.push({
+            subor: subor||'', izometria: izometria||'', kategoria: kategoria||'', 
+            poz: poz||'', dn: dn||'', popis: popis||'', mn: mn||'', hmotn: hmotn||'',
+            weldType: weldType||'', isoKey: isoKey||''
+          });
         });
 
         window.mtoData.isoList = Object.keys(isoSet).sort();
