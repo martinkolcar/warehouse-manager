@@ -3088,10 +3088,14 @@ function renderZoznam() {
         // Ak je to ELBOW45 pokryté rezaním
         const rez = typ === 'ELBOW45' && rezaneInfo[rozmer];
         // Nájdi tavbu z vydajky pre tento typ+rozmer
+        // Pre ELBOW45 z rezania → hľadaj tavbu z ELBOW90
         const tavbaLine = lines.find(l => {
           const wt = classifySkladTyp(l.typ);
           const lroz = (l.rozmer||'').replace(/mm$/i,'').trim();
-          return wt === typ && lroz === rozmer && l.tavba;
+          if (wt === typ && lroz === rozmer && l.tavba) return true;
+          // Pre ELBOW45 z rezania — tavba je na ELBOW90
+          if (typ === 'ELBOW45' && wt === 'ELBOW90' && lroz === rozmer && l.rezanyNa === 'ELBOW45' && l.tavba) return true;
+          return false;
         });
         vydaneDetail.push({
           typ, rozmer,
@@ -3166,7 +3170,8 @@ function renderZoznam() {
               ).reduce((s,l) => s + (parseFloat(l.vydQty)||0), 0);
               const extra = c.extra45 > 0 ? ` +${c.extra45}× sklad` : '';
               const directPart = direct45 > 0 ? `${direct45}× ELBOW45 + ` : '';
-              return `<span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:3px">${c.qty}× ELBOW45 — ${directPart}${c.qty90}× ELBOW90 ✂️${extra}</span>`;
+              const tavbaPart = c.tavba ? ` · <b>${c.tavba}</b>` : '';
+              return `<span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:3px">${c.qty}× ELBOW45 — ${directPart}${c.qty90}× ELBOW90 ✂️${extra}${tavbaPart}</span>`;
             }
             return `<span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:3px">${c.typ} ${c.rozmer}: <b>${c.qty}</b>${c.tavba?' · '+c.tavba:''}</span>`;
           }).join('') +
