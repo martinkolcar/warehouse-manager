@@ -1288,6 +1288,8 @@ function rozmerySedia(mtoRozmer, skladRozmer, mtoRozmer2) {
   var mOD = mParts[0]; var mWT = mParts[1]||'';
   var sOD = sParts[0]; var sWT = sParts[1]||'';
 
+  // Príruba s=8mm vs DN50 — rozmery sú v rôznych formátoch, nechaj PN rozhodnúť
+  if (m.startsWith('s') && (s.startsWith('dn') || !s.includes('x'))) return true;
   // Príruba s=8mm — porovnaj hrúbku
   if (m.startsWith('s')) {
     var mWTonly = m.replace('s','');
@@ -2816,11 +2818,22 @@ function openCoMozeme() {
         var mRoz2 = (m.dims2||'').replace(/\s/g,'').replace(/mm$/i,'');
         var rozMatch = rozmerySedia(mRoz, itRoz, mRoz2);
 
-        // Pre FLANGE — porovnaj aj PN z typu skladu s PN z MTO popisu
-        if (rozMatch && m.weldType === 'FLANGE' && m.pn) {
-          var itPN = (it.typ||'').match(/PN\s*(\d+)/i);
-          var itPNval = itPN ? 'PN'+itPN[1] : '';
-          if (itPNval && itPNval !== m.pn) rozMatch = false;
+        // Pre FLANGE — porovnaj DN, PN aj hrúbku steny
+        if (rozMatch && m.weldType === 'FLANGE') {
+          // PN z typu skladu
+          var itPNm = (it.typ||'').match(/PN\s*(\d+)/i);
+          var itPNval = itPNm ? 'PN'+itPNm[1] : '';
+          if (m.pn && itPNval && itPNval !== m.pn) { rozMatch = false; }
+          // DN z rozmeru skladu vs dn z MTO
+          var itDNm = (it.rozmer||'').match(/DN\s*(\d+)/i);
+          var itDN = itDNm ? itDNm[1] : '';
+          var mDN = String(m.dn||'').replace(/X.*/,''); // hlavný DN
+          if (itDN && mDN && itDN !== mDN) { rozMatch = false; }
+          // Hrúbka s= z typu skladu vs s= z MTO
+          var itWTm = (it.typ||'').match(/s\s*=\s*(\d+\.?\d*)\s*mm/i);
+          var itWT = itWTm ? itWTm[1] : '';
+          var mWT = m.dims && m.dims.startsWith('s') ? m.dims.replace('s','') : '';
+          if (itWT && mWT && itWT !== mWT) { rozMatch = false; }
         }
         var itMat = (it.material||'').toLowerCase();
         var mMat = (m.mat||'').toLowerCase();
