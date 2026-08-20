@@ -1754,8 +1754,23 @@ function addMTOToVydajka(mtoIdx) {
     var itWt = classifySkladTyp(it.typ);
     if (itWt !== wt) return false;
     var itRoz = (it.rozmer||'').replace(/mm$/i,'').trim();
-    var mRoz = rozmer.replace(/mm$/i,'').trim();
-    return !mRoz || itRoz === mRoz || itRoz.includes(mRoz.split('x')[0]);
+    var mRoz = (dims.size||'').replace(/mm$/i,'').trim();
+    if (!rozmerySedia(mRoz, itRoz, dims.size2||'')) return false;
+    // Pre FLANGE — skontroluj DN, PN a hrúbku
+    if (wt === 'FLANGE') {
+      var itPNm = (it.typ||'').match(/PN\s*(\d+)/i);
+      var itPN = itPNm ? 'PN'+itPNm[1] : '';
+      if (dims.pn && itPN && itPN !== dims.pn) return false;
+      var itDNm = (it.rozmer||'').match(/DN\s*(\d+)/i);
+      var itDN = itDNm ? itDNm[1] : '';
+      var mDN = String(m.dn||'');
+      if (itDN && mDN && itDN !== mDN) return false;
+      var itWTm = (it.typ||'').match(/s\s*=\s*(\d+\.?\d*)\s*mm/i);
+      var itWT = itWTm ? itWTm[1] : '';
+      var mWT = dims.wt || '';
+      if (itWT && mWT && itWT !== mWT) return false;
+    }
+    return true;
   });
 
   // Ak je presne jedna položka v sklade — vezmi jej tavbu
