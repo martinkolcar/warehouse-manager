@@ -1265,6 +1265,18 @@ function rozmerySedia(mtoRozmer, skladRozmer, mtoRozmer2) {
   var s = (skladRozmer||'').replace(/mm/gi,'').replace(/\s/g,'').toLowerCase();
   if (!m || !s) return true;
 
+  // Pre redukovaný T-kus/reduktor — sklad musí mať oba rozmery (napr. 60.3x4/48.3x5)
+  if (mtoRozmer2) {
+    var m2 = (mtoRozmer2||'').replace(/mm/gi,'').replace(/\s/g,'').toLowerCase();
+    // Sklad rozmer musí obsahovať lomítko a zodpovedať obom rozmerom
+    if (s.includes('/')) {
+      var sParts = s.split('/');
+      return (sParts[0] === m && sParts[1] === m2) || (sParts[0] === m2 && sParts[1] === m);
+    }
+    // Sklad nemá lomítko — nie je redukovaný, nesedí
+    return false;
+  }
+
   // Presná zhoda
   if (m === s) return true;
 
@@ -1284,14 +1296,6 @@ function rozmerySedia(mtoRozmer, skladRozmer, mtoRozmer2) {
 
   // Ak oba majú hrúbku — musí sedieť
   if (mWT && sWT && mWT !== sWT) return false;
-
-  // Pre redukovaný T-kus/reduktor — skontroluj aj druhý rozmer
-  if (mtoRozmer2) {
-    var m2 = (mtoRozmer2||'').replace(/mm/gi,'').replace(/\s/g,'').toLowerCase();
-    // Sklad musí obsahovať buď hlavný alebo odbočkový rozmer
-    // (sklad má len jeden rozmer pre redukovaný T-kus)
-    if (s !== m && s !== m2) return false;
-  }
 
   return true;
 }
