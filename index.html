@@ -1230,22 +1230,25 @@ function classifyWeldType(popis) {
 
 function extractDimsFromPopis(popis) {
   var p = popis || '';
-  // Redukovaný formát: 88.9x4.5mm/60.3x4mm (T-kus red., reduktor)
+  // Extrahuj PN
+  var pnMatch = p.match(/PN\s*(\d+)/i);
+  var pn = pnMatch ? 'PN'+pnMatch[1] : '';
+  // Redukovaný formát: 88.9x4.5mm/60.3x4mm
   var mRed = p.match(/(\d+\.?\d*x\d+\.?\d*)mm?\s*\/\s*(\d+\.?\d*x\d+\.?\d*)mm?/i);
-  if (mRed) return { od: mRed[1].split('x')[0], wt: mRed[1].split('x')[1], size: mRed[1], size2: mRed[2] };
-  // Formát: 355.6x8.8mm alebo 355.6x8.8
+  if (mRed) return { od: mRed[1].split('x')[0], wt: mRed[1].split('x')[1], size: mRed[1], size2: mRed[2], pn: pn };
+  // Formát: 355.6x8.8mm
   var m = p.match(/(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*mm/i);
-  if (m) return { od: m[1], wt: m[2], size: m[1]+'x'+m[2], size2: '' };
+  if (m) return { od: m[1], wt: m[2], size: m[1]+'x'+m[2], size2: '', pn: pn };
   // Formát bez mm: 355.6x8.8
   var m2 = p.match(/(\d+\.?\d*)\s*x\s*(\d+\.?\d*)/);
-  if (m2) return { od: m2[1], wt: m2[2], size: m2[1]+'x'+m2[2], size2: '' };
+  if (m2) return { od: m2[1], wt: m2[2], size: m2[1]+'x'+m2[2], size2: '', pn: pn };
   // Príruba: s=8.8mm
   var m3 = p.match(/s\s*=\s*(\d+\.?\d*)\s*mm/i);
-  if (m3) return { od: '', wt: m3[1], size: 's'+m3[1], size2: '' };
+  if (m3) return { od: '', wt: m3[1], size: 's'+m3[1], size2: '', pn: pn };
   // DN formát
   var m4 = p.match(/DN\s*(\d+)/i);
-  if (m4) return { od: m4[1], wt: '', size: m4[1], size2: '' };
-  return { od: '', wt: '', size: '', size2: '' };
+  if (m4) return { od: m4[1], wt: '', size: m4[1], size2: '', pn: pn };
+  return { od: '', wt: '', size: '', size2: '', pn: pn };
 }
 
 // Extrahuje hrúbku steny z rozmeru skladu alebo popisu
@@ -2785,12 +2788,13 @@ function openCoMozeme() {
     mtoItems.forEach(function(m) {
       var dims = extractDimsFromPopis(m.popis);
       var mat = extractMaterialFromPopis(m.popis);
-      // Kľúč zahrnuje aj druhý rozmer (pre redukovaný T-kus, reduktor)
       var sizeKey = dims.size + (dims.size2 ? '/'+dims.size2 : '');
-      var key = m.weldType + '||' + (sizeKey||m.dn);
+      // Zahrnúť PN do kľúča pre príruby
+      var pnKey = dims.pn ? '|'+dims.pn : '';
+      var key = m.weldType + '||' + (sizeKey||m.dn) + pnKey;
       var mnNum = parseFloat((m.mn||'0').toString().replace(',','.').replace(/[mM\s]/g,'')) || 0;
       if (!mtoGrouped[key]) {
-        mtoGrouped[key] = { weldType: m.weldType, dn: m.dn, dims: dims.size||(m.dn+''), dims2: dims.size2||'', mat: mat, mn: 0, popis: m.popis.substring(0,80) };
+        mtoGrouped[key] = { weldType: m.weldType, dn: m.dn, dims: dims.size||(m.dn+''), dims2: dims.size2||'', pn: dims.pn||'', mat: mat, mn: 0, popis: m.popis.substring(0,80) };
       }
       mtoGrouped[key].mn += mnNum;
     });
@@ -2800,6 +2804,7 @@ function openCoMozeme() {
 
       // Hľadaj v sklade — typ musí sedieť (PIPE=PIPE, ostatné=fittingy)
       var isPipeMTO = m.weldType === 'PIPE';
+      var mPN = m.pn || '';
       var found = items.filter(function(it) {
         if (parseFloat(it.zostatok) <= 0) return false;
         var itWt = classifySkladTyp(it.typ);
@@ -2810,6 +2815,13 @@ function openCoMozeme() {
         var mRoz = (m.dims||'').replace(/\s/g,'').replace(/mm$/i,'');
         var mRoz2 = (m.dims2||'').replace(/\s/g,'').replace(/mm$/i,'');
         var rozMatch = rozmerySedia(mRoz, itRoz, mRoz2);
+
+        // Pre FLANGE — porovnaj aj PN z typu skladu s PN z MTO popisu
+        if (rozMatch && m.weldType === 'FLANGE' && m.pn) {
+          var itPN = (it.typ||'').match(/PN\s*(\d+)/i);
+          var itPNval = itPN ? 'PN'+itPN[1] : '';
+          if (itPNval && itPNval !== m.pn) rozMatch = false;
+        }
         var itMat = (it.material||'').toLowerCase();
         var mMat = (m.mat||'').toLowerCase();
         var matMatch = !mMat || itMat.includes(mMat) || mMat.includes(itMat);
