@@ -1783,12 +1783,12 @@ function addMTOToVydajka(mtoIdx) {
 // ─── PRIDAŤ DO VÝDAJKY ────────────────────────
 
 // Pridanie bez otázok (priamo)
-function addToVydajkaDirect(idx, qty) {
+function addToVydajkaDirect(idx, qty, forceRezat) {
   const it = items[idx];
   if (!it) return;
   const isPipe = classifySkladTyp(it.typ) === 'PIPE';
 
-  // Ak je ELBOW90 a MTO potrebuje ELBOW45 ale NEpotrebuje ELBOW90 tohto rozmeru → označ ako rezaný
+  // Ak je ELBOW90 a MTO potrebuje ELBOW45 → označ ako rezaný
   const wt = classifySkladTyp(it.typ);
   let rezanyNa = null;
   if (wt === 'ELBOW90' && vydIso) {
@@ -1802,8 +1802,8 @@ function addToVydajkaDirect(idx, qty) {
       (m.weldType||'').toUpperCase() === 'ELBOW90' &&
       (m.popis||'').includes(rozNorm)
     );
-    // Rezať len ak MTO potrebuje ELBOW45 ale NEpotrebuje ELBOW90
-    if (needsE45 && !needsE90) rezanyNa = 'ELBOW45';
+    // Rezať ak: výnimka (forceRezat) alebo MTO potrebuje ELBOW45 ale NEpotrebuje ELBOW90
+    if (needsE45 && (forceRezat || !needsE90)) rezanyNa = 'ELBOW45';
   }
 
   vydLines.push({
@@ -1863,7 +1863,11 @@ function addToVydajka(idx) {
     }
   }
 
-  addToVydajkaDirect(idx);
+  const wt2 = classifySkladTyp(it.typ);
+  // Ak je výnimka ELBOW90 (nie je v MTO kľúčoch) → forceRezat
+  const _rn = (it.rozmer||'').replace(/mm$/i,'').trim();
+  const isVynimkaElbow = window.vydVynimkaMode && wt2 === 'ELBOW90';
+  addToVydajkaDirect(idx, null, isVynimkaElbow);
 }
 
 // Pridá jeden riadok do tabuľky bez rekreovania ostatných
