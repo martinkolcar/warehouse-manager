@@ -2332,7 +2332,15 @@ async function zapisHeatyDoWeldPro(vydajka) {
   vydajka.lines.forEach(function(l) {
     var wbTyp = wbShortType(l.typ);
     if (!wbTyp) return;
-    var dim = (l.rozmer||'').split('x')[0].replace(/^DN/i,'').trim();
+    // Pre FLANGE z MTO - rozmer je 's4' (hrúbka), ale WeldPro má dimenziu ako OD
+    // Použi DN z mtoPopis alebo nechaj prázdne aby matchovalo všetky FLANGE na trase
+    var dim = (l.rozmer||'').split('x')[0].replace(/^DN/i,'').replace(/^s\d.*$/i,'').trim();
+    // Ak dim začína s 's' (hrúbka steny) → vyber DN z mtoPopis
+    if (!dim || (l.rozmer||'').startsWith('s')) {
+      var dnM = (l.mtoPopis||'').match(/DN\s*(\d+)/i);
+      if (dnM) dim = dnM[1];
+      else dim = ''; // prázdne = matchuj všetky FLANGE na trase
+    }
     var key = wbTyp + '||' + dim;
     var skladItem = items.find(function(it) {
       return (it.typ||'').toLowerCase() === (l.typ||'').toLowerCase() &&
@@ -3080,8 +3088,8 @@ function renderZoznam() {
 
     const mtoMap = {};
     mtoItems.forEach(m => {
-      const rozmerKey = (m.popis||'').match(/(\d+\.?\d*x\d+\.?\d*mm?)/i);
-      const rozmer = rozmerKey ? rozmerKey[1].replace(/mm$/i,'').trim() : ('DN'+(m.dn||''));
+      const dims = extractDimsFromPopis(m.popis);
+      const rozmer = dims.size || ('DN'+(m.dn||''));
       const k = (m.weldType||'').toUpperCase() + '|' + rozmer;
       const mnVal = parseFloat((m.mn||'').toString().replace(/[mM\s]/g,''))||1;
       mtoMap[k] = (mtoMap[k]||0) + mnVal;
